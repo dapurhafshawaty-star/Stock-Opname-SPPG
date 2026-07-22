@@ -8,8 +8,9 @@ import InventoryList from './components/InventoryList';
 import StockOpname from './components/StockOpname';
 import StockKeluar from './components/StockKeluar';
 import HistoryKeluar from './components/HistoryKeluar';
+import MenuPlanner from './components/MenuPlanner';
 import Settings from './components/Settings';
-import { LayoutDashboard, ClipboardCheck, ArrowDownRight, History, Settings as SettingsIcon, LogOut, RefreshCw, Sparkles, Layers, CheckCircle2, AlertCircle } from 'lucide-react';
+import { LayoutDashboard, ClipboardCheck, ArrowDownRight, History, Settings as SettingsIcon, LogOut, RefreshCw, Sparkles, Layers, CheckCircle2, AlertCircle, Utensils, Share2, Copy, Check, Cloud } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 // ==========================================
@@ -203,7 +204,7 @@ const DEFAULT_STAFF: UserProfile[] = [
 
 export default function App() {
   // Navigation
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'inventory' | 'opname' | 'stock_keluar' | 'history_keluar' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'inventory' | 'opname' | 'stock_keluar' | 'history_keluar' | 'menu_planner' | 'settings'>('dashboard');
   const [inventoryInitialFilter, setInventoryInitialFilter] = useState<'all' | 'low' | 'expired' | 'expiring'>('all');
 
   // Dynamic App & Kitchen Profile Settings
@@ -224,6 +225,15 @@ export default function App() {
     localStorage.setItem('sppg_app_name', name);
     localStorage.setItem('sppg_app_logo_text', logoText);
     localStorage.setItem('sppg_app_logo_url', logoUrl);
+  };
+
+  // Shared Link Copy State
+  const [copiedUrl, setCopiedUrl] = useState(false);
+
+  const handleCopyAppUrl = () => {
+    navigator.clipboard.writeText(window.location.href);
+    setCopiedUrl(true);
+    setTimeout(() => setCopiedUrl(false), 2500);
   };
 
   // Authentication & Session
@@ -408,7 +418,7 @@ export default function App() {
         setLoadingCloud(false);
       }
     } else {
-      // Prompt user to auto-create or link sheet in Settings
+      // Flexible cloud sync: spreadsheet connection is optional via Settings menu
     }
 
     return { email: result.user.email || '', token: result.accessToken };
@@ -482,10 +492,39 @@ export default function App() {
     }
   };
 
-  // Trigger manual sync
+  // Trigger manual sync to cloud
   const handleManualSync = async () => {
     if (!token || !sheetConfig.spreadsheetId || isDemoMode) return;
     await syncToCloud(sheetConfig.spreadsheetId);
+  };
+
+  // Fetch latest cloud data from Google Sheets across devices
+  const handleRefreshFromCloud = async () => {
+    if (!token || !sheetConfig.spreadsheetId || isDemoMode) {
+      alert('Perlu login Google Sheets aktif untuk memperbarui data cloud.');
+      return;
+    }
+    try {
+      setLoadingCloud(true);
+      const cloudData = await fetchSpreadsheetData(sheetConfig.spreadsheetId, token);
+      setIngredients(cloudData.ingredients);
+      setLogs(cloudData.logs);
+      setMenus(cloudData.menus);
+      setStaffProfiles(cloudData.staff);
+      saveLocally(cloudData.ingredients, cloudData.logs, cloudData.menus, cloudData.staff);
+
+      const updatedConfig = {
+        ...sheetConfig,
+        isSynced: true,
+        lastSyncedAt: new Date().toISOString(),
+      };
+      setSheetConfig(updatedConfig);
+      localStorage.setItem('sppg_sheet_config', JSON.stringify(updatedConfig));
+    } catch (err: any) {
+      alert('Gagal memperbarui data dari Google Sheets: ' + err.message);
+    } finally {
+      setLoadingCloud(false);
+    }
   };
 
   // Complete Google + PIN Authentication
@@ -807,6 +846,17 @@ export default function App() {
           </button>
 
           <button
+            onClick={() => setActiveTab('menu_planner')}
+            className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold flex items-center gap-3 transition-all cursor-pointer ${
+              activeTab === 'menu_planner'
+                ? 'bg-emerald-500/15 text-emerald-400 border-l-4 border-emerald-500 font-extrabold'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+            }`}
+          >
+            <Utensils className="w-4 h-4 text-amber-400" /> <span>Menu Masakan & Resep</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('settings')}
             className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold flex items-center gap-3 transition-all cursor-pointer ${
               activeTab === 'settings'
@@ -848,6 +898,58 @@ export default function App() {
 
       {/* 2. PRIMARY CONTENT AREA */}
       <main className="flex-1 p-4 sm:p-6 md:p-8 overflow-y-auto max-h-screen">
+        
+        {/* TOP CLOUD SYNC & SINGLE ACCESS LINK HEADER BAR */}
+        <div className="mb-6 bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100">
+              <Cloud className="w-5 h-5 animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-800">Akses Web Terpusat</span>
+                <span className="bg-emerald-100 text-emerald-800 text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-emerald-200">
+                  Live Online Sync
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 font-medium">
+                Satu tautan web aplikasi. Sinkronisasi Google Sheets dapat diatur secara opsional melalui menu Pengaturan.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
+            <button
+              type="button"
+              onClick={handleRefreshFromCloud}
+              disabled={loadingCloud || !sheetConfig.spreadsheetId || isDemoMode}
+              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+              title="Tarik data terbaru dari Google Sheets"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loadingCloud ? 'animate-spin' : ''}`} />
+              <span>{loadingCloud ? 'Menyingkronkan...' : 'Perbarui Data'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleCopyAppUrl}
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs active:scale-95 cursor-pointer"
+            >
+              {copiedUrl ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-emerald-200" />
+                  <span>Link Tersalin!</span>
+                </>
+              ) : (
+                <>
+                  <Share2 className="w-3.5 h-3.5" />
+                  <span>Salin Link Akses Web</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
@@ -901,6 +1003,18 @@ export default function App() {
               <HistoryKeluar
                 logs={logs}
                 ingredients={ingredients}
+              />
+            )}
+
+            {activeTab === 'menu_planner' && (
+              <MenuPlanner
+                ingredients={ingredients}
+                menus={menus}
+                onAddMenu={handleAddMenu}
+                onDeleteMenu={handleDeleteMenu}
+                onUpdateIngredient={handleUpdateIngredient}
+                onLogTransaction={handleLogTransaction}
+                userName={activeUserProfile?.name || 'Staf Dapur'}
               />
             )}
 

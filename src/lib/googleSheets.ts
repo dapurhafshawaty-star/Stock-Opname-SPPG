@@ -124,7 +124,7 @@ export async function fetchSpreadsheetData(spreadsheetId: string, token: string)
     try {
       parsedIngredients = JSON.parse(row[3] || '[]');
     } catch {
-      // Fallback
+      parsedIngredients = [];
     }
     return {
       id: row[0] || '',
@@ -157,9 +157,13 @@ export async function syncAllDataToSheets(
     staff: UserProfile[];
   }
 ): Promise<void> {
-  // To avoid leaving deleted data, we can clear the sheets first, or write the exact ranges.
-  // A cleaner approach is to clear Master Stok, Log, Menu, and Profil ranges, and then rewrite.
-  const clearRanges = ['Master Stok!A2:J1000', 'Log Transaksi!A2:J5000', 'Menu Masakan!A2:D500', 'Profil Staff!A2:E200'];
+  const clearRanges = [
+    'Master Stok!A2:J1000',
+    'Log Transaksi!A2:J5000',
+    'Menu Masakan!A2:D500',
+    'Profil Staff!A2:E200'
+  ];
+
   await sheetsFetch(`${SHEETS_API_BASE}/${spreadsheetId}/values:batchClear`, token, {
     method: 'POST',
     body: JSON.stringify({ ranges: clearRanges }),
@@ -174,7 +178,7 @@ export async function syncAllDataToSheets(
         item.name,
         item.category,
         item.currentStock,
-        0, // minStock column (deprecated)
+        0, // minStock column
         item.unit,
         item.expiryDate,
         item.location,
@@ -228,3 +232,5 @@ export async function syncAllDataToSheets(
     });
   }
 }
+
+

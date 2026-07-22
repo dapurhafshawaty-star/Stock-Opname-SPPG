@@ -290,10 +290,23 @@ export default function Settings({
               <div className={`p-2 rounded-lg shrink-0 ${sheetConfig.isSynced ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}`}>
                 <Check className="w-4 h-4" />
               </div>
-              <div className="text-xs">
-                <p className="font-bold text-slate-800">Sistem Sinkron</p>
-                <p className="text-slate-500 mt-0.5">SpreadsheetID: <strong className="font-mono text-[10px] break-all">{sheetConfig.spreadsheetId || 'Belum Terhubung'}</strong></p>
-                <p className="text-slate-400 mt-1">Terakhir update: {sheetConfig.lastSyncedAt ? new Date(sheetConfig.lastSyncedAt).toLocaleString('id-ID') : 'Belum pernah'}</p>
+              <div className="text-xs space-y-1">
+                <p className="font-bold text-slate-800">Status Google Sheets</p>
+                <p className="text-slate-500">SpreadsheetID: <strong className="font-mono text-[10px] break-all">{sheetConfig.spreadsheetId || 'Belum Terhubung'}</strong></p>
+                <p className="text-slate-400">Terakhir update: {sheetConfig.lastSyncedAt ? new Date(sheetConfig.lastSyncedAt).toLocaleString('id-ID') : 'Belum pernah'}</p>
+              </div>
+            </div>
+
+            {/* Sheets Reporting Tabs Indicator */}
+            <div className="p-3 bg-emerald-50/50 border border-emerald-100/80 rounded-xl space-y-2 text-xs">
+              <p className="font-bold text-emerald-900 flex items-center gap-1.5 text-[11px]">
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" /> Lembar Kerja Database:
+              </p>
+              <div className="grid grid-cols-2 gap-1.5 text-[10px] text-emerald-800 font-medium">
+                <span className="bg-white px-2 py-1 rounded border border-emerald-200/60 truncate">📊 Master Stok</span>
+                <span className="bg-white px-2 py-1 rounded border border-emerald-200/60 truncate">📜 Log Transaksi</span>
+                <span className="bg-white px-2 py-1 rounded border border-emerald-200/60 truncate">🍱 Menu Masakan</span>
+                <span className="bg-white px-2 py-1 rounded border border-emerald-200/60 truncate">👥 Profil Staff</span>
               </div>
             </div>
 
