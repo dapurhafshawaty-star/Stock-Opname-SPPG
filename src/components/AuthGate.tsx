@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { googleSignIn, logoutFirebase } from '../lib/firebaseAuth';
 import { UserProfile, UserRole } from '../types';
-import { LogIn, ShieldAlert, KeyRound, ArrowLeft, RefreshCw, LogOut, CheckCircle2 } from 'lucide-react';
+import { LogIn, ShieldAlert, KeyRound, ArrowLeft, RefreshCw, LogOut, CheckCircle2, Copy, ExternalLink, Check, Globe } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface AuthGateProps {
@@ -26,7 +26,17 @@ export default function AuthGate({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  // PIN Login States
+  const [copiedDomain, setCopiedDomain] = useState(false);
+  const currentHostname = typeof window !== 'undefined' ? window.location.hostname : '';
+  const isUnauthorizedDomainErr = error?.toLowerCase().includes('unauthorized-domain') || error?.toLowerCase().includes('belum diizinkan');
+
+  const handleCopyDomain = () => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(currentHostname);
+      setCopiedDomain(true);
+      setTimeout(() => setCopiedDomain(false), 2000);
+    }
+  };
   const [selectedProfile, setSelectedProfile] = useState<UserProfile | null>(null);
   const [pin, setPin] = useState('');
   const [pinError, setPinError] = useState(false);
@@ -155,11 +165,47 @@ export default function AuthGate({
         </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 rounded-xl border border-red-100 flex items-start gap-2 text-xs text-red-600">
-            <ShieldAlert className="w-4 h-4 shrink-0 text-red-500 mt-0.5" />
-            <div>
-              <span className="font-semibold">Perhatian:</span> {error}
+          <div className="mb-4 p-3.5 bg-red-50/90 rounded-2xl border border-red-200 text-xs text-red-700 shadow-2xs">
+            <div className="flex items-start gap-2 mb-1.5">
+              <ShieldAlert className="w-4 h-4 shrink-0 text-red-600 mt-0.5" />
+              <div className="font-bold text-red-900 text-xs">
+                {isUnauthorizedDomainErr ? 'Domain Belum Diizinkan di Firebase' : 'Perhatian Log Masuk'}
+              </div>
             </div>
+            
+            <p className="leading-relaxed text-red-700">{error}</p>
+
+            {isUnauthorizedDomainErr && (
+              <div className="mt-3 pt-3 border-t border-red-200/80 space-y-2 text-[11px]">
+                <div className="bg-white p-2.5 rounded-xl border border-red-200 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 truncate">
+                    <Globe className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                    <span className="font-mono font-bold text-slate-800 truncate">{currentHostname}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCopyDomain}
+                    className="shrink-0 bg-red-100 hover:bg-red-200 text-red-800 font-bold px-2 py-1 rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                  >
+                    {copiedDomain ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                    <span>{copiedDomain ? 'Tersalin!' : 'Salin Domain'}</span>
+                  </button>
+                </div>
+
+                <div className="bg-white/80 p-2.5 rounded-xl border border-red-100 space-y-1.5 text-slate-700">
+                  <p className="font-bold text-slate-900 flex items-center gap-1">
+                    Cara Mengizinkan Domain di Firebase:
+                  </p>
+                  <ol className="list-decimal list-inside space-y-1 text-[11px] text-slate-600">
+                    <li>Buka <a href="https://console.firebase.google.com" target="_blank" rel="noreferrer" className="text-blue-600 underline font-semibold inline-flex items-center gap-0.5">Firebase Console <ExternalLink className="w-2.5 h-2.5 inline" /></a></li>
+                    <li>Pilih proyek Firebase Anda &rarr; <strong>Authentication</strong> &rarr; Tab <strong>Settings</strong></li>
+                    <li>Pada section <strong>Authorized domains</strong>, klik <strong>Add domain</strong></li>
+                    <li>Tempel domain <code className="bg-slate-100 px-1 py-0.5 rounded text-red-600 font-bold">{currentHostname}</code> lalu klik <strong>Save</strong></li>
+                    <li>Coba klik tombol <strong>Masuk dengan Google</strong> kembali.</li>
+                  </ol>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

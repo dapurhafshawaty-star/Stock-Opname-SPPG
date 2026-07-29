@@ -46,8 +46,17 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
     }
     cachedAccessToken = credential.accessToken;
     return { user: result.user, accessToken: cachedAccessToken };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Firebase Google Sign-in Error:', error);
+    if (error?.code === 'auth/unauthorized-domain' || error?.message?.includes('unauthorized-domain')) {
+      const currentHost = typeof window !== 'undefined' ? window.location.hostname : '';
+      const customError = new Error(
+        `Domain (${currentHost}) belum diizinkan di Firebase Console. Silakan tambahkan '${currentHost}' ke daftar Authorized Domains di Firebase.`
+      );
+      (customError as any).code = 'auth/unauthorized-domain';
+      (customError as any).hostname = currentHost;
+      throw customError;
+    }
     throw error;
   } finally {
     isSigningIn = false;
