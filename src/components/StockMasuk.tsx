@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { Ingredient, StockBatch, StockLog } from '../types';
+import { Ingredient, StockBatch, StockLog, UNITS } from '../types';
 import { ArrowUpRight, Plus, Trash2, CheckCircle2, RefreshCw, Layers, Sparkles, FileText, FileSpreadsheet, FileUp, Download, AlertCircle, Calendar, Upload } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import * as XLSX from 'xlsx';
@@ -45,15 +45,19 @@ const normalizeCategory = (cat: string): Ingredient['category'] => {
 
 const normalizeUnit = (u: string): Ingredient['unit'] => {
   const lower = (u || '').toLowerCase().trim();
-  if (['kg', 'kilogram', 'kilo'].includes(lower)) return 'kg';
-  if (['gr', 'gram', 'g'].includes(lower)) return 'gr';
-  if (['l', 'liter', 'ltr'].includes(lower)) return 'liter';
-  if (['ml', 'milli'].includes(lower)) return 'ml';
-  if (['pcs', 'pc', 'buah', 'biji'].includes(lower)) return 'pcs';
-  if (['pack', 'pak', 'bungkus'].includes(lower)) return 'pack';
-  if (['ikat'].includes(lower)) return 'ikat';
-  if (['butir'].includes(lower)) return 'butir';
-  return 'kg';
+  if (!lower) return 'Kg';
+  const match = UNITS.find(item => item.toLowerCase() === lower);
+  if (match) return match;
+  if (['kg', 'kilogram', 'kilo'].includes(lower)) return 'Kg';
+  if (['gr', 'gram', 'g'].includes(lower)) return 'Gram (g)';
+  if (['l', 'liter', 'ltr'].includes(lower)) return 'Liter (L)';
+  if (['ml', 'milli', 'mililiter'].includes(lower)) return 'Mililiter (ml)';
+  if (['pcs', 'pc', 'buah', 'biji'].includes(lower)) return 'Pcs';
+  if (['pack', 'pak'].includes(lower)) return 'Pack';
+  if (['renteng', 'rentengan'].includes(lower)) return 'Renteng';
+  if (['ikat'].includes(lower)) return 'Ikat';
+  if (['butir'].includes(lower)) return 'Butir';
+  return u.trim() || 'Kg';
 };
 
 const formatDateString = (rawDate: any): string => {
@@ -700,16 +704,14 @@ export default function StockMasuk({
                       <select
                         value={row.unit}
                         onChange={(e) => handleRowChange(row.id, 'unit', e.target.value)}
-                        className="w-full text-xs bg-white border border-slate-200 rounded-lg p-2 text-slate-700 font-bold focus:outline-none focus:border-emerald-500"
+                        className="w-full text-xs bg-white border border-slate-200 rounded-lg p-2 text-slate-700 font-bold focus:outline-none focus:border-emerald-500 cursor-pointer"
                       >
-                        <option value="kg">kg</option>
-                        <option value="gr">gr</option>
-                        <option value="liter">liter</option>
-                        <option value="ml">ml</option>
-                        <option value="pcs">pcs</option>
-                        <option value="pack">pack</option>
-                        <option value="ikat">ikat</option>
-                        <option value="butir">butir</option>
+                        {UNITS.map(u => (
+                          <option key={u} value={u}>{u}</option>
+                        ))}
+                        {row.unit && !UNITS.some(u => u.toLowerCase() === row.unit.toLowerCase()) && (
+                          <option value={row.unit}>{row.unit}</option>
+                        )}
                       </select>
                     </td>
 

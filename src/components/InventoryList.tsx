@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Ingredient, UserRole, TransactionType, StockLog, StockBatch } from '../types';
+import { Ingredient, UserRole, TransactionType, StockLog, StockBatch, UNITS } from '../types';
 import { Plus, Edit3, Trash2, Search, ArrowUpDown, Filter, AlertTriangle, Calendar, PlusCircle, MinusCircle, RefreshCw, Trash, X, Save, Check, Upload, FileSpreadsheet, FileText, CheckCircle2, AlertCircle, HelpCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import * as XLSX from 'xlsx';
@@ -17,7 +17,6 @@ interface InventoryListProps {
 }
 
 const CATEGORIES = ['Sembako', 'Sayur & Buah', 'Daging & Ikan', 'Bumbu & Rempah', 'Bahan Kering', 'Susu & Olahan', 'Lainnya'] as const;
-const UNITS = ['kg', 'gr', 'liter', 'ml', 'pcs', 'pack', 'ikat', 'butir'] as const;
 const LOCATIONS = ['Kulkas Utama', 'Kulkas Sayur', 'Freezer Daging', 'Rak Kering A', 'Rak Kering B', 'Bumbu Station', 'Gudang Luar'] as const;
 
 interface BulkRow {
@@ -25,7 +24,7 @@ interface BulkRow {
   name: string;
   category: typeof CATEGORIES[number];
   quantity: number;
-  unit: typeof UNITS[number];
+  unit: string;
   location: string;
   notes: string;
 }
@@ -649,8 +648,8 @@ export default function InventoryList({
           const rawCat = row[catIdx] ? String(row[catIdx]).trim() : 'Sembako';
           const matchedCat = CATEGORIES.find(c => c.toLowerCase() === rawCat.toLowerCase()) || 'Sembako';
           
-          const rawUnit = row[unitIdx] ? String(row[unitIdx]).trim() : 'kg';
-          const matchedUnit = UNITS.find(u => u.toLowerCase() === rawUnit.toLowerCase()) || 'kg';
+          const rawUnit = row[unitIdx] ? String(row[unitIdx]).trim() : 'Kg';
+          const matchedUnit = UNITS.find(u => u.toLowerCase() === rawUnit.toLowerCase()) || rawUnit || 'Kg';
 
           const rawLoc = row[locIdx] ? String(row[locIdx]).trim() : LOCATIONS[0];
           const matchedLoc = LOCATIONS.find(l => l.toLowerCase() === rawLoc.toLowerCase()) || LOCATIONS[0];
@@ -734,7 +733,7 @@ export default function InventoryList({
           let name = parts[0];
           let barcode = '';
           let qty = 0;
-          let unit: typeof UNITS[number] = 'kg';
+          let unit: string = 'Kg';
           let cat: typeof CATEGORIES[number] = 'Sembako';
           let loc: string = LOCATIONS[0];
           let notes = 'Imported dari PDF';
@@ -1444,6 +1443,9 @@ export default function InventoryList({
                       {UNITS.map(u => (
                         <option key={u} value={u}>{u}</option>
                       ))}
+                      {formUnit && !UNITS.some(u => u.toLowerCase() === formUnit.toLowerCase()) && (
+                        <option value={formUnit}>{formUnit}</option>
+                      )}
                     </select>
                   </div>
                 </div>

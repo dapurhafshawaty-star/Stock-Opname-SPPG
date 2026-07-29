@@ -16,12 +16,56 @@ export interface StockBatch {
   expiryDate?: string; // YYYY-MM-DD
 }
 
+export const UNITS = [
+  'Pcs',
+  'Unit',
+  'Kg',
+  'Ons',
+  'Gram (g)',
+  'Ton',
+  'Liter (L)',
+  'Mililiter (ml)',
+  'Kardus',
+  'Karton',
+  'Box',
+  'Pack',
+  'Renteng',
+  'Bungkus',
+  'Sak',
+  'Karung',
+  'Botol',
+  'Kaleng',
+  'Gelas',
+  'Cup',
+  'Pouch',
+  'Roll',
+  'Lembar',
+  'Helai',
+  'Batang',
+  'Ikat',
+  'Tandan',
+  'Butir',
+  'Ekor',
+  'Pasang',
+  'Set',
+  'Rim',
+  'Kodi',
+  'Lusin',
+  'Gross',
+  'Tray',
+  'Jerigen',
+  'Tabung',
+  'Drum'
+] as const;
+
+export type IngredientUnit = typeof UNITS[number] | string;
+
 export interface Ingredient {
   id: string; // Barcode or auto-generated ID
   name: string;
   category: 'Sembako' | 'Sayur & Buah' | 'Daging & Ikan' | 'Bumbu & Rempah' | 'Bahan Kering' | 'Susu & Olahan' | 'Lainnya';
   currentStock: number;
-  unit: 'kg' | 'gr' | 'liter' | 'ml' | 'pcs' | 'pack' | 'ikat' | 'butir';
+  unit: IngredientUnit;
   expiryDate?: string; // YYYY-MM-DD (now optional)
   location: string; // e.g., 'Kulkas Utama', 'Rak Kering A'
   lastUpdated: string;
