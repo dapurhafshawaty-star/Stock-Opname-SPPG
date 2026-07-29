@@ -185,7 +185,7 @@ export default function InventoryList({
 
           if (additionalStock > 0) {
             await onLogTransaction({
-              id: 'LOG-' + Date.now(),
+              id: 'LOG-' + Date.now() + '-' + Math.floor(1000 + Math.random() * 9000),
               timestamp: new Date().toISOString(),
               ingredientId: existing.id,
               ingredientName: existing.name,
@@ -215,7 +215,7 @@ export default function InventoryList({
 
           if (payload.currentStock > 0) {
             await onLogTransaction({
-              id: 'LOG-' + Date.now(),
+              id: 'LOG-' + Date.now() + '-' + Math.floor(1000 + Math.random() * 9000),
               timestamp: new Date().toISOString(),
               ingredientId: payload.id,
               ingredientName: payload.name,
@@ -256,7 +256,7 @@ export default function InventoryList({
         
         if (oldStock !== payload.currentStock) {
           await onLogTransaction({
-            id: 'LOG-' + Date.now(),
+            id: 'LOG-' + Date.now() + '-' + Math.floor(1000 + Math.random() * 9000),
             timestamp: new Date().toISOString(),
             ingredientId: payload.id,
             ingredientName: payload.name,
@@ -342,7 +342,7 @@ export default function InventoryList({
 
       await onUpdateIngredient(updatedItem);
       await onLogTransaction({
-        id: 'LOG-' + Date.now(),
+        id: 'LOG-' + Date.now() + '-' + Math.floor(1000 + Math.random() * 9000),
         timestamp: new Date().toISOString(),
         ingredientId: selectedAdjustItem.id,
         ingredientName: selectedAdjustItem.name,
@@ -372,7 +372,7 @@ export default function InventoryList({
     try {
       await onDeleteIngredient(item.id);
       await onLogTransaction({
-        id: 'LOG-' + Date.now(),
+        id: 'LOG-' + Date.now() + '-' + Math.floor(1000 + Math.random() * 9000),
         timestamp: new Date().toISOString(),
         ingredientId: item.id,
         ingredientName: item.name,

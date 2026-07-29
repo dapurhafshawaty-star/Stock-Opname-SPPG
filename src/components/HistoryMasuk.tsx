@@ -8,21 +8,22 @@ import {
   Download, 
   FileSpreadsheet, 
   Layers, 
-  TrendingDown, 
+  TrendingUp, 
   Filter, 
   ChevronLeft, 
   ChevronRight,
   Sparkles,
-  Info
+  Info,
+  ArrowUpRight
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
-interface HistoryKeluarProps {
+interface HistoryMasukProps {
   logs: StockLog[];
   ingredients: Ingredient[];
 }
 
-export default function HistoryKeluar({ logs, ingredients }: HistoryKeluarProps) {
+export default function HistoryMasuk({ logs, ingredients }: HistoryMasukProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [selectedUser, setSelectedUser] = useState<string>('All');
@@ -30,26 +31,26 @@ export default function HistoryKeluar({ logs, ingredients }: HistoryKeluarProps)
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 15;
 
-  // Filter logs to only get KELUAR transactions
-  const stockKeluarLogs = useMemo(() => {
-    return logs.filter(log => log.type === 'KELUAR');
+  // Filter logs to only get MASUK transactions
+  const stockMasukLogs = useMemo(() => {
+    return logs.filter(log => log.type === 'MASUK');
   }, [logs]);
 
-  // Extract unique categories from ingredients to support filtering
+  // Extract unique categories from ingredients
   const categories = useMemo(() => {
     const cats = ingredients.map(ing => ing.category);
     return ['All', ...Array.from(new Set(cats))];
   }, [ingredients]);
 
-  // Extract unique users/staff members who made outbound transactions
+  // Extract unique users/staff members who received stock
   const uniqueUsers = useMemo(() => {
-    const users = stockKeluarLogs.map(log => log.user);
+    const users = stockMasukLogs.map(log => log.user);
     return ['All', ...Array.from(new Set(users))];
-  }, [stockKeluarLogs]);
+  }, [stockMasukLogs]);
 
-  // Filter logic based on user selection
+  // Filter logic based on user selections
   const filteredLogs = useMemo(() => {
-    return stockKeluarLogs.filter(log => {
+    return stockMasukLogs.filter(log => {
       // 1. Search term match (ingredient name, ingredient ID, or notes)
       const term = searchTerm.trim().toLowerCase();
       const matchesSearch = !term || 
@@ -84,7 +85,7 @@ export default function HistoryKeluar({ logs, ingredients }: HistoryKeluarProps)
 
       return matchesSearch && matchesCategory && matchesUser && matchesDate;
     });
-  }, [stockKeluarLogs, ingredients, searchTerm, selectedCategory, selectedUser, dateFilter]);
+  }, [stockMasukLogs, ingredients, searchTerm, selectedCategory, selectedUser, dateFilter]);
 
   // Pagination helper
   const totalPages = Math.ceil(filteredLogs.length / itemsPerPage);
@@ -97,10 +98,10 @@ export default function HistoryKeluar({ logs, ingredients }: HistoryKeluarProps)
   const stats = useMemo(() => {
     const totalTransactions = filteredLogs.length;
     
-    // Sum absolute quantities
+    // Sum incoming quantities
     const totalVolume = filteredLogs.reduce((acc, log) => acc + Math.abs(log.quantity), 0);
 
-    // Find most frequently taken ingredient
+    // Find most frequently received ingredient
     const frequencyMap: { [key: string]: { count: number, name: string } } = {};
     filteredLogs.forEach(log => {
       if (!frequencyMap[log.ingredientId]) {
@@ -118,7 +119,7 @@ export default function HistoryKeluar({ logs, ingredients }: HistoryKeluarProps)
       }
     });
 
-    // Find most active staff for outgoing stock
+    // Find most active staff for receiving stock
     const staffMap: { [key: string]: number } = {};
     filteredLogs.forEach(log => {
       staffMap[log.user] = (staffMap[log.user] || 0) + 1;
@@ -152,23 +153,23 @@ export default function HistoryKeluar({ logs, ingredients }: HistoryKeluarProps)
       const ing = ingredients.find(i => i.id === log.ingredientId);
       return {
         'No': index + 1,
-        'Waktu Keluar': new Date(log.timestamp).toLocaleString('id-ID'),
+        'Waktu Masuk': new Date(log.timestamp).toLocaleString('id-ID'),
         'ID Bahan': log.ingredientId,
         'Nama Bahan': log.ingredientName,
         'Kategori': ing ? ing.category : 'Lainnya',
-        'Jumlah Keluar': Math.abs(log.quantity),
+        'Jumlah Masuk': Math.abs(log.quantity),
         'Satuan': ing ? ing.unit : '',
         'Stok Sebelumnya': log.prevStock,
         'Stok Sesudahnya': log.newStock,
-        'Penanggung Jawab': log.user,
-        'Catatan': log.notes || '',
+        'Petugas Penerima': log.user,
+        'Catatan / Vendor': log.notes || '',
       };
     });
 
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Riwayat Keluar");
-    XLSX.writeFile(workbook, `History_Barang_Keluar_${new Date().toISOString().split('T')[0]}.xlsx`);
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Riwayat Barang Masuk");
+    XLSX.writeFile(workbook, `History_Barang_Masuk_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   const handlePageChange = (page: number) => {
@@ -184,18 +185,18 @@ export default function HistoryKeluar({ logs, ingredients }: HistoryKeluarProps)
       <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2.5">
-            <History className="w-5 h-5 text-indigo-500" /> Riwayat Barang Keluar (Bahan Terpakai)
+            <ArrowUpRight className="w-5 h-5 text-emerald-600" /> Riwayat Barang Masuk (Penerimaan Stok)
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            Mencatat dan melacak seluruh penggunaan bahan baku makanan yang dikeluarkan dari gudang dapur SPPG.
+            Mencatat dan melacak seluruh penerimaan serta pengadaan bahan baku makanan yang masuk ke gudang dapur.
           </p>
         </div>
         <button
           onClick={handleExportToExcel}
           disabled={filteredLogs.length === 0}
-          className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-100 disabled:text-slate-400 text-slate-950 font-extrabold rounded-xl text-xs flex items-center gap-2 shadow-sm transition-all active:scale-95 cursor-pointer shrink-0"
+          className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-100 disabled:text-slate-400 text-white font-extrabold rounded-xl text-xs flex items-center gap-2 shadow-sm transition-all active:scale-95 cursor-pointer shrink-0"
         >
-          <FileSpreadsheet className="w-4 h-4" /> Export Excel ({filteredLogs.length} Data)
+          <FileSpreadsheet className="w-4 h-4 text-emerald-200" /> Export Excel ({filteredLogs.length} Data)
         </button>
       </div>
 
@@ -203,22 +204,22 @@ export default function HistoryKeluar({ logs, ingredients }: HistoryKeluarProps)
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Metric 1 */}
         <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
-          <div className="p-3.5 bg-indigo-50 text-indigo-500 rounded-2xl shrink-0">
+          <div className="p-3.5 bg-emerald-50 text-emerald-600 rounded-2xl shrink-0">
             <History className="w-5 h-5" />
           </div>
           <div>
-            <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block">Total Pengeluaran</span>
+            <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block">Total Penerimaan</span>
             <span className="text-xl font-black text-slate-900 block mt-0.5">{stats.totalTransactions} Transaksi</span>
           </div>
         </div>
 
         {/* Metric 2 */}
         <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
-          <div className="p-3.5 bg-rose-50 text-rose-500 rounded-2xl shrink-0">
-            <TrendingDown className="w-5 h-5" />
+          <div className="p-3.5 bg-emerald-50 text-emerald-600 rounded-2xl shrink-0">
+            <TrendingUp className="w-5 h-5" />
           </div>
           <div>
-            <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block">Volume Terpakai</span>
+            <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block">Volume Masuk</span>
             <span className="text-xl font-black text-slate-900 block mt-0.5">{stats.totalVolume.toLocaleString('id-ID')} unit</span>
           </div>
         </div>
@@ -229,7 +230,7 @@ export default function HistoryKeluar({ logs, ingredients }: HistoryKeluarProps)
             <Layers className="w-5 h-5" />
           </div>
           <div className="min-w-0 flex-1">
-            <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block">Bahan Terpopuler</span>
+            <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block">Bahan Sering Masuk</span>
             <span className="text-sm font-black text-slate-900 block mt-0.5 truncate" title={stats.topIngredient}>
               {stats.topIngredient}
             </span>
@@ -238,11 +239,11 @@ export default function HistoryKeluar({ logs, ingredients }: HistoryKeluarProps)
 
         {/* Metric 4 */}
         <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
-          <div className="p-3.5 bg-emerald-50 text-emerald-500 rounded-2xl shrink-0">
+          <div className="p-3.5 bg-teal-50 text-teal-600 rounded-2xl shrink-0">
             <User className="w-5 h-5" />
           </div>
           <div className="min-w-0 flex-1">
-            <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block">Petugas Pengambil</span>
+            <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block">Petugas Penerima</span>
             <span className="text-sm font-black text-slate-900 block mt-0.5 truncate" title={stats.topStaff}>
               {stats.topStaff}
             </span>
@@ -263,13 +264,13 @@ export default function HistoryKeluar({ logs, ingredients }: HistoryKeluarProps)
             <Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
             <input
               type="text"
-              placeholder="Cari nama bahan, kode, atau catatan..."
+              placeholder="Cari nama bahan, kode, atau catatan vendor..."
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value);
                 setCurrentPage(1);
               }}
-              className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:border-indigo-500 transition-all text-slate-800 font-medium"
+              className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:border-emerald-500 transition-all text-slate-800 font-medium"
             />
           </div>
 
@@ -281,7 +282,7 @@ export default function HistoryKeluar({ logs, ingredients }: HistoryKeluarProps)
                 setSelectedCategory(e.target.value);
                 setCurrentPage(1);
               }}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 focus:outline-none focus:border-indigo-500 font-semibold cursor-pointer"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 focus:outline-none focus:border-emerald-500 font-semibold cursor-pointer"
             >
               <option value="All">Semua Kategori</option>
               {categories.filter(c => c !== 'All').map(cat => (
@@ -298,7 +299,7 @@ export default function HistoryKeluar({ logs, ingredients }: HistoryKeluarProps)
                 setSelectedUser(e.target.value);
                 setCurrentPage(1);
               }}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 focus:outline-none focus:border-indigo-500 font-semibold cursor-pointer"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 focus:outline-none focus:border-emerald-500 font-semibold cursor-pointer"
             >
               <option value="All">Semua Petugas</option>
               {uniqueUsers.filter(u => u !== 'All').map(user => (
@@ -312,7 +313,7 @@ export default function HistoryKeluar({ logs, ingredients }: HistoryKeluarProps)
             <button
               onClick={() => { setDateFilter('all'); setCurrentPage(1); }}
               className={`py-1 rounded-lg text-[10px] font-bold transition-all ${
-                dateFilter === 'all' ? 'bg-white text-indigo-600 shadow-xs' : 'text-slate-400 hover:text-slate-600'
+                dateFilter === 'all' ? 'bg-white text-emerald-700 shadow-xs font-extrabold' : 'text-slate-400 hover:text-slate-600'
               }`}
             >
               Semua
@@ -320,7 +321,7 @@ export default function HistoryKeluar({ logs, ingredients }: HistoryKeluarProps)
             <button
               onClick={() => { setDateFilter('today'); setCurrentPage(1); }}
               className={`py-1 rounded-lg text-[10px] font-bold transition-all ${
-                dateFilter === 'today' ? 'bg-white text-indigo-600 shadow-xs' : 'text-slate-400 hover:text-slate-600'
+                dateFilter === 'today' ? 'bg-white text-emerald-700 shadow-xs font-extrabold' : 'text-slate-400 hover:text-slate-600'
               }`}
             >
               Hari Ini
@@ -328,7 +329,7 @@ export default function HistoryKeluar({ logs, ingredients }: HistoryKeluarProps)
             <button
               onClick={() => { setDateFilter('week'); setCurrentPage(1); }}
               className={`py-1 rounded-lg text-[10px] font-bold transition-all ${
-                dateFilter === 'week' ? 'bg-white text-indigo-600 shadow-xs' : 'text-slate-400 hover:text-slate-600'
+                dateFilter === 'week' ? 'bg-white text-emerald-700 shadow-xs font-extrabold' : 'text-slate-400 hover:text-slate-600'
               }`}
             >
               7 Hari
@@ -336,7 +337,7 @@ export default function HistoryKeluar({ logs, ingredients }: HistoryKeluarProps)
             <button
               onClick={() => { setDateFilter('month'); setCurrentPage(1); }}
               className={`py-1 rounded-lg text-[10px] font-bold transition-all ${
-                dateFilter === 'month' ? 'bg-white text-indigo-600 shadow-xs' : 'text-slate-400 hover:text-slate-600'
+                dateFilter === 'month' ? 'bg-white text-emerald-700 shadow-xs font-extrabold' : 'text-slate-400 hover:text-slate-600'
               }`}
             >
               30 Hari
@@ -350,11 +351,11 @@ export default function HistoryKeluar({ logs, ingredients }: HistoryKeluarProps)
         {filteredLogs.length === 0 ? (
           <div className="p-16 text-center flex flex-col items-center justify-center gap-3">
             <div className="p-4 bg-slate-50 text-slate-400 rounded-full border border-slate-100">
-              <History className="w-8 h-8" />
+              <History className="w-8 h-8 text-emerald-500" />
             </div>
-            <p className="text-sm font-bold text-slate-700">Tidak ada riwayat penarikan barang</p>
+            <p className="text-sm font-bold text-slate-700">Tidak ada riwayat penerimaan barang masuk</p>
             <p className="text-xs text-slate-400 max-w-sm">
-              Sistem tidak menemukan log barang keluar yang sesuai dengan kata kunci pencarian atau filter yang Anda terapkan.
+              Sistem tidak menemukan log barang masuk yang sesuai dengan kata kunci pencarian atau filter yang Anda terapkan.
             </p>
           </div>
         ) : (
@@ -366,13 +367,13 @@ export default function HistoryKeluar({ logs, ingredients }: HistoryKeluarProps)
                 <thead>
                   <tr className="bg-slate-50 text-slate-400 text-[10px] font-extrabold uppercase tracking-wider border-b border-slate-100">
                     <th className="py-4 px-5 w-12 text-center">No</th>
-                    <th className="py-4 px-4 w-44">Waktu Keluar</th>
+                    <th className="py-4 px-4 w-44">Waktu Masuk</th>
                     <th className="py-4 px-4 w-36">Kode ID</th>
                     <th className="py-4 px-4">Nama Bahan Baku</th>
                     <th className="py-4 px-4 w-36">Kategori</th>
-                    <th className="py-4 px-4 w-32 text-right">Jumlah Keluar</th>
-                    <th className="py-4 px-4 w-44">Penanggung Jawab</th>
-                    <th className="py-4 px-4 max-w-[200px]">Catatan</th>
+                    <th className="py-4 px-4 w-32 text-right">Jumlah Masuk</th>
+                    <th className="py-4 px-4 w-44">Petugas Penerima</th>
+                    <th className="py-4 px-4 max-w-[200px]">Catatan / Vendor</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-xs">
@@ -401,12 +402,12 @@ export default function HistoryKeluar({ logs, ingredients }: HistoryKeluarProps)
                           </span>
                         </td>
                         <td className="py-3.5 px-4 text-right">
-                          <span className="font-black text-rose-600 bg-rose-50 px-2.5 py-1 rounded-xl text-xs">
-                            -{Math.abs(log.quantity)} {ing ? ing.unit : ''}
+                          <span className="font-black text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-xl text-xs">
+                            +{Math.abs(log.quantity)} {ing ? ing.unit : ''}
                           </span>
                         </td>
                         <td className="py-3.5 px-4 font-bold text-slate-700 flex items-center gap-1.5">
-                          <div className="w-5 h-5 bg-indigo-50 rounded-full flex items-center justify-center text-[9px] text-indigo-600 font-black uppercase">
+                          <div className="w-5 h-5 bg-emerald-100 rounded-full flex items-center justify-center text-[9px] text-emerald-800 font-black uppercase">
                             {log.user.substring(0, 2)}
                           </div>
                           <span className="truncate max-w-32">{log.user}</span>
@@ -434,8 +435,8 @@ export default function HistoryKeluar({ logs, ingredients }: HistoryKeluarProps)
                         <span className="text-[9px] text-slate-400 font-bold block">NO. {idx} • ID: {log.ingredientId}</span>
                         <h4 className="text-sm font-extrabold text-slate-900 mt-1">{log.ingredientName}</h4>
                       </div>
-                      <span className="font-black text-rose-600 bg-rose-50 px-2.5 py-1 rounded-xl text-xs shrink-0">
-                        -{Math.abs(log.quantity)} {ing ? ing.unit : ''}
+                      <span className="font-black text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-xl text-xs shrink-0">
+                        +{Math.abs(log.quantity)} {ing ? ing.unit : ''}
                       </span>
                     </div>
 
@@ -445,7 +446,7 @@ export default function HistoryKeluar({ logs, ingredients }: HistoryKeluarProps)
                         <span className="font-bold text-slate-700">{ing ? ing.category : 'Lainnya'}</span>
                       </div>
                       <div>
-                        <span className="text-slate-400 block font-semibold uppercase text-[9px]">Pengambil</span>
+                        <span className="text-slate-400 block font-semibold uppercase text-[9px]">Penerima</span>
                         <span className="font-bold text-slate-700 truncate block">{log.user}</span>
                       </div>
                     </div>
@@ -500,10 +501,10 @@ export default function HistoryKeluar({ logs, ingredients }: HistoryKeluarProps)
       </div>
 
       {/* Info Notice card */}
-      <div className="bg-indigo-50/50 border border-indigo-100 p-4 rounded-2xl flex gap-3 items-start">
-        <Info className="w-4 h-4 text-indigo-500 shrink-0 mt-0.5" />
-        <p className="text-[11px] text-indigo-800 leading-relaxed font-semibold">
-          Seluruh log penarikan di atas tersimpan aman di basis data lokal secara langsung (offline-first). Jika Anda memiliki koneksi Google Sheet yang aktif di tab <strong>Pengaturan</strong>, data ini akan secara otomatis ter-sinkronisasi ke cloud spreadsheet secara real-time.
+      <div className="bg-emerald-50/50 border border-emerald-100 p-4 rounded-2xl flex gap-3 items-start">
+        <Info className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+        <p className="text-[11px] text-emerald-900 leading-relaxed font-semibold">
+          Seluruh log penerimaan barang di atas tersimpan otomatis di basis data lokal secara langsung. Apabila koneksi Google Sheet aktif di tab <strong>Pengaturan</strong>, riwayat barang masuk ini juga ter-sync otomatis ke spreadsheet cloud.
         </p>
       </div>
 

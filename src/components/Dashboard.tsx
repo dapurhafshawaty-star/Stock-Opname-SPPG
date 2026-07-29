@@ -382,11 +382,11 @@ export default function Dashboard({ ingredients, logs, onNavigateToInventory }: 
               </div>
             ) : (
               <div className="space-y-4">
-                {recentLogs.map((log) => {
+                {recentLogs.map((log, index) => {
                   const isMasuk = log.type === 'MASUK';
                   const isKeluar = log.type === 'KELUAR';
                   return (
-                    <div key={log.id} className="flex gap-3 text-xs items-start">
+                    <div key={`${log.id}-${index}`} className="flex gap-3 text-xs items-start">
                       <div className={`mt-0.5 px-2 py-0.5 rounded font-black shrink-0 ${
                         isMasuk
                           ? 'bg-emerald-50 text-emerald-600'

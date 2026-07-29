@@ -6,11 +6,14 @@ import AuthGate from './components/AuthGate';
 import Dashboard from './components/Dashboard';
 import InventoryList from './components/InventoryList';
 import StockOpname from './components/StockOpname';
+import StockMasuk from './components/StockMasuk';
 import StockKeluar from './components/StockKeluar';
+import HistoryMasuk from './components/HistoryMasuk';
 import HistoryKeluar from './components/HistoryKeluar';
+import StockReport from './components/StockReport';
 import MenuPlanner from './components/MenuPlanner';
 import Settings from './components/Settings';
-import { LayoutDashboard, ClipboardCheck, ArrowDownRight, History, Settings as SettingsIcon, LogOut, RefreshCw, Sparkles, Layers, CheckCircle2, AlertCircle, Utensils, Share2, Copy, Check, Cloud } from 'lucide-react';
+import { LayoutDashboard, ClipboardCheck, ArrowUpRight, ArrowDownRight, History, FileText, Settings as SettingsIcon, LogOut, RefreshCw, Sparkles, Layers, CheckCircle2, AlertCircle, Utensils, Share2, Copy, Check, Cloud } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 // ==========================================
@@ -204,7 +207,7 @@ const DEFAULT_STAFF: UserProfile[] = [
 
 export default function App() {
   // Navigation
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'inventory' | 'opname' | 'stock_keluar' | 'history_keluar' | 'menu_planner' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'inventory' | 'opname' | 'stock_masuk' | 'stock_keluar' | 'history_masuk' | 'history_keluar' | 'stock_report' | 'menu_planner' | 'settings'>('dashboard');
   const [inventoryInitialFilter, setInventoryInitialFilter] = useState<'all' | 'low' | 'expired' | 'expiring'>('all');
 
   // Dynamic App & Kitchen Profile Settings
@@ -824,6 +827,17 @@ export default function App() {
           )}
 
           <button
+            onClick={() => setActiveTab('stock_masuk')}
+            className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold flex items-center gap-3 transition-all cursor-pointer ${
+              activeTab === 'stock_masuk'
+                ? 'bg-emerald-500/15 text-emerald-400 border-l-4 border-emerald-500 font-extrabold'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+            }`}
+          >
+            <ArrowUpRight className="w-4 h-4 text-emerald-400" /> <span>Barang Masuk</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('stock_keluar')}
             className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold flex items-center gap-3 transition-all cursor-pointer ${
               activeTab === 'stock_keluar'
@@ -835,6 +849,17 @@ export default function App() {
           </button>
 
           <button
+            onClick={() => setActiveTab('history_masuk')}
+            className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold flex items-center gap-3 transition-all cursor-pointer ${
+              activeTab === 'history_masuk'
+                ? 'bg-emerald-500/15 text-emerald-400 border-l-4 border-emerald-500 font-extrabold'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+            }`}
+          >
+            <History className="w-4 h-4 text-emerald-400" /> <span>History Barang Masuk</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('history_keluar')}
             className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold flex items-center gap-3 transition-all cursor-pointer ${
               activeTab === 'history_keluar'
@@ -843,6 +868,17 @@ export default function App() {
             }`}
           >
             <History className="w-4 h-4 text-indigo-400" /> <span>History Barang Keluar</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('stock_report')}
+            className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold flex items-center gap-3 transition-all cursor-pointer ${
+              activeTab === 'stock_report'
+                ? 'bg-emerald-500/15 text-emerald-400 border-l-4 border-emerald-500 font-extrabold'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+            }`}
+          >
+            <FileText className="w-4 h-4 text-emerald-400" /> <span>Cetak Laporan Stock</span>
           </button>
 
           <button
@@ -990,6 +1026,14 @@ export default function App() {
               />
             )}
 
+            {activeTab === 'stock_masuk' && (
+              <StockMasuk
+                ingredients={ingredients}
+                userName={activeUserProfile?.name || 'Staf Dapur'}
+                onBatchAddOrUpdateIngredientsAndLogs={handleBatchAddOrUpdateIngredientsAndLogs}
+              />
+            )}
+
             {activeTab === 'stock_keluar' && (
               <StockKeluar
                 ingredients={ingredients}
@@ -999,10 +1043,25 @@ export default function App() {
               />
             )}
 
+            {activeTab === 'history_masuk' && (
+              <HistoryMasuk
+                logs={logs}
+                ingredients={ingredients}
+              />
+            )}
+
             {activeTab === 'history_keluar' && (
               <HistoryKeluar
                 logs={logs}
                 ingredients={ingredients}
+              />
+            )}
+
+            {activeTab === 'stock_report' && (
+              <StockReport
+                ingredients={ingredients}
+                logs={logs}
+                appName={appName}
               />
             )}
 
