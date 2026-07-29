@@ -420,7 +420,7 @@ export default function StockMasuk({
             quantity: qtyIn,
             initialQuantity: qtyIn,
             receivedDate: timestamp,
-            expiryDate: row.expiryDate || undefined,
+            ...(row.expiryDate ? { expiryDate: row.expiryDate } : {}),
           };
 
           const newIngredient: Ingredient = {
@@ -429,11 +429,11 @@ export default function StockMasuk({
             category: row.category,
             currentStock: qtyIn,
             unit: row.unit,
-            expiryDate: row.expiryDate || undefined,
             location: row.location || 'Gudang Utama',
             lastUpdated: timestamp,
-            notes: row.notes || undefined,
             batches: [initialBatch],
+            ...(row.expiryDate ? { expiryDate: row.expiryDate } : {}),
+            ...(row.notes ? { notes: row.notes } : {}),
           };
 
           itemsToUpdateOrAdd.push(newIngredient);
@@ -455,12 +455,13 @@ export default function StockMasuk({
           const existingItem = itemsToUpdateOrAdd.find((i) => i.id === row.ingredientId) || ingredients.find((i) => i.id === row.ingredientId);
           if (!existingItem) continue;
 
+          const expDate = row.expiryDate || existingItem.expiryDate;
           const newBatch: StockBatch = {
             id: `BATCH-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
             quantity: qtyIn,
             initialQuantity: qtyIn,
             receivedDate: timestamp,
-            expiryDate: row.expiryDate || existingItem.expiryDate,
+            ...(expDate ? { expiryDate: expDate } : {}),
           };
 
           const existingBatches = existingItem.batches || [];
@@ -472,9 +473,9 @@ export default function StockMasuk({
             ...existingItem,
             currentStock: newStock,
             batches: updatedBatches,
-            expiryDate: row.expiryDate || existingItem.expiryDate,
-            location: row.location || existingItem.location,
+            location: row.location || existingItem.location || 'Gudang Utama',
             lastUpdated: timestamp,
+            ...(expDate ? { expiryDate: expDate } : {}),
           };
 
           // Update in local items list

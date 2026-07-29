@@ -46,6 +46,31 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   throw new Error(JSON.stringify(errInfo));
 }
 
+/**
+ * Sanitizes an object before writing to Firestore.
+ * Firestore throws an error if any field in the document has a value of `undefined`.
+ * This helper recursively removes keys with `undefined` values.
+ */
+export function cleanForFirestore<T>(data: T): T {
+  if (data === null || data === undefined) {
+    return data;
+  }
+  if (Array.isArray(data)) {
+    return data.map((item) => cleanForFirestore(item)) as unknown as T;
+  }
+  if (typeof data === 'object' && !(data instanceof Date)) {
+    const cleaned: any = {};
+    for (const key of Object.keys(data)) {
+      const val = (data as any)[key];
+      if (val !== undefined) {
+        cleaned[key] = cleanForFirestore(val);
+      }
+    }
+    return cleaned as T;
+  }
+  return data;
+}
+
 // 1. Connection check
 export async function testFirestoreConnection(): Promise<boolean> {
   try {
@@ -155,7 +180,7 @@ export async function saveIngredientCloud(ingredient: Ingredient): Promise<void>
   const path = `ingredients/${ingredient.id}`;
   try {
     const docRef = doc(db, 'ingredients', ingredient.id);
-    await setDoc(docRef, ingredient, { merge: true });
+    await setDoc(docRef, cleanForFirestore(ingredient), { merge: true });
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, path);
   }
@@ -175,7 +200,7 @@ export async function addStockLogCloud(log: StockLog): Promise<void> {
   const path = `stock_logs/${log.id}`;
   try {
     const docRef = doc(db, 'stock_logs', log.id);
-    await setDoc(docRef, log);
+    await setDoc(docRef, cleanForFirestore(log));
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, path);
   }
@@ -185,7 +210,7 @@ export async function saveMenuCloud(menu: MenuItem): Promise<void> {
   const path = `menus/${menu.id}`;
   try {
     const docRef = doc(db, 'menus', menu.id);
-    await setDoc(docRef, menu, { merge: true });
+    await setDoc(docRef, cleanForFirestore(menu), { merge: true });
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, path);
   }
@@ -205,7 +230,7 @@ export async function saveStaffProfileCloud(profile: UserProfile): Promise<void>
   const path = `staff_profiles/${profile.id}`;
   try {
     const docRef = doc(db, 'staff_profiles', profile.id);
-    await setDoc(docRef, profile, { merge: true });
+    await setDoc(docRef, cleanForFirestore(profile), { merge: true });
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, path);
   }
@@ -225,7 +250,7 @@ export async function saveAppSettingsCloud(appName: string, appLogoText: string,
   const path = 'app_settings/profile';
   try {
     const docRef = doc(db, 'app_settings', 'profile');
-    await setDoc(docRef, { appName, appLogoText, appLogoUrl }, { merge: true });
+    await setDoc(docRef, cleanForFirestore({ appName, appLogoText, appLogoUrl }), { merge: true });
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, path);
   }
@@ -244,7 +269,7 @@ export async function seedInitialCloudDataIfEmpty(
       console.log('Seeding initial ingredients to Google Cloud Firestore...');
       const batch = writeBatch(db);
       defaultIngredients.forEach((item) => {
-        batch.set(doc(db, 'ingredients', item.id), item);
+        batch.set(doc(db, 'ingredients', item.id), cleanForFirestore(item));
       });
       await batch.commit();
     }
@@ -253,7 +278,7 @@ export async function seedInitialCloudDataIfEmpty(
     if (logSnap.empty) {
       const batch = writeBatch(db);
       defaultLogs.forEach((item) => {
-        batch.set(doc(db, 'stock_logs', item.id), item);
+        batch.set(doc(db, 'stock_logs', item.id), cleanForFirestore(item));
       });
       await batch.commit();
     }
@@ -262,7 +287,7 @@ export async function seedInitialCloudDataIfEmpty(
     if (menuSnap.empty) {
       const batch = writeBatch(db);
       defaultMenus.forEach((item) => {
-        batch.set(doc(db, 'menus', item.id), item);
+        batch.set(doc(db, 'menus', item.id), cleanForFirestore(item));
       });
       await batch.commit();
     }
@@ -271,7 +296,7 @@ export async function seedInitialCloudDataIfEmpty(
     if (staffSnap.empty) {
       const batch = writeBatch(db);
       defaultStaff.forEach((item) => {
-        batch.set(doc(db, 'staff_profiles', item.id), item);
+        batch.set(doc(db, 'staff_profiles', item.id), cleanForFirestore(item));
       });
       await batch.commit();
     }
