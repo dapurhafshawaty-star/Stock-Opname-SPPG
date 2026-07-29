@@ -100,9 +100,9 @@ export interface MenuItem {
   }[];
 }
 
-export interface SheetConfig {
-  spreadsheetId: string | null;
-  spreadsheetUrl: string | null;
-  isSynced: boolean;
+export interface CloudDbConfig {
+  isCloudConnected: boolean;
+  projectId: string;
+  databaseId: string;
   lastSyncedAt: string | null;
 }

@@ -1,7 +1,25 @@
 import { useState, useEffect } from 'react';
-import { UserProfile, Ingredient, StockLog, MenuItem, SheetConfig, UserRole } from './types';
+import { UserProfile, Ingredient, StockLog, MenuItem, CloudDbConfig, UserRole } from './types';
 import { initAuth, googleSignIn, logoutFirebase } from './lib/firebaseAuth';
-import { createOpnameSpreadsheet, fetchSpreadsheetData, syncAllDataToSheets } from './lib/googleSheets';
+import {
+  subscribeIngredients,
+  subscribeLogs,
+  subscribeMenus,
+  subscribeStaffProfiles,
+  subscribeAppSettings,
+  saveIngredientCloud,
+  deleteIngredientCloud,
+  addStockLogCloud,
+  saveMenuCloud,
+  deleteMenuCloud,
+  saveStaffProfileCloud,
+  deleteStaffProfileCloud,
+  saveAppSettingsCloud,
+  seedInitialCloudDataIfEmpty,
+  testFirestoreConnection,
+} from './lib/firestoreService';
+import firebaseConfig from '../firebase-applet-config.json';
+
 import AuthGate from './components/AuthGate';
 import Dashboard from './components/Dashboard';
 import InventoryList from './components/InventoryList';
@@ -12,12 +30,13 @@ import HistoryMasuk from './components/HistoryMasuk';
 import HistoryKeluar from './components/HistoryKeluar';
 import StockReport from './components/StockReport';
 import MenuPlanner from './components/MenuPlanner';
+import GoogleDocsManager from './components/GoogleDocsManager';
 import Settings from './components/Settings';
-import { LayoutDashboard, ClipboardCheck, ArrowUpRight, ArrowDownRight, History, FileText, Settings as SettingsIcon, LogOut, RefreshCw, Sparkles, Layers, CheckCircle2, AlertCircle, Utensils, Share2, Copy, Check, Cloud } from 'lucide-react';
+import { LayoutDashboard, ClipboardCheck, ArrowUpRight, ArrowDownRight, History, FileText, Settings as SettingsIcon, LogOut, RefreshCw, Sparkles, Layers, Utensils, Share2, Check, Cloud } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 // ==========================================
-// PREPOPULATED BEAUTIFUL DEMO DATA (Offline Fallback)
+// PREPOPULATED BEAUTIFUL INITIAL DATA
 // ==========================================
 const DEFAULT_INGREDIENTS: Ingredient[] = [
   {
@@ -37,9 +56,9 @@ const DEFAULT_INGREDIENTS: Ingredient[] = [
     category: 'Sembako',
     currentStock: 48,
     unit: 'liter',
-    expiryDate: '2027-02-10',
+    expiryDate: '2027-01-20',
     location: 'Rak Kering B',
-    notes: 'Stok bulanan untuk menggoreng lauk pauk.',
+    notes: 'Kemasan refill 2 liter.',
     lastUpdated: new Date().toISOString(),
   },
   {
@@ -48,64 +67,42 @@ const DEFAULT_INGREDIENTS: Ingredient[] = [
     category: 'Daging & Ikan',
     currentStock: 25,
     unit: 'kg',
-    expiryDate: '2026-07-26', // near expiration
-    location: 'Freezer Daging',
-    notes: 'Suplai segar mingguan, simpan dalam suhu beku di freezer utama.',
+    expiryDate: '2026-08-10',
+    location: 'Freezer Utama #1',
+    notes: 'Potongan segar tanpa tulang, sudah dicuci bersih.',
     lastUpdated: new Date().toISOString(),
   },
   {
-    id: '8993001201903',
-    name: 'Susu UHT Frisian Flag Full Cream',
-    category: 'Susu & Olahan',
-    currentStock: 4,
-    expiryDate: '2026-07-15', // expired
-    unit: 'pack',
-    location: 'Kulkas Utama',
-    notes: 'Dipakai untuk puding makanan penutup hari Jumat.',
+    id: '8992004501234',
+    name: 'Telur Ayam Horn Negeri',
+    category: 'Daging & Ikan',
+    currentStock: 300,
+    unit: 'butir',
+    expiryDate: '2026-08-05',
+    location: 'Rak Telur Dapur',
+    notes: '1 Karpet isi 30 butir.',
     lastUpdated: new Date().toISOString(),
   },
   {
     id: '8995001239102',
     name: 'Bawang Merah Samosir Super',
     category: 'Bumbu & Rempah',
-    currentStock: 6,
+    currentStock: 15,
     unit: 'kg',
-    expiryDate: '2026-08-05',
-    location: 'Bumbu Station',
-    notes: 'Bumbu dasar dapur harian SPPG.',
-    lastUpdated: new Date().toISOString(),
-  },
-  {
-    id: '8992004501234',
-    name: 'Telur Ayam Horn Negeri',
-    category: 'Sembako',
-    currentStock: 150,
-    unit: 'butir',
-    expiryDate: '2026-07-29',
-    location: 'Rak Kering A',
-    notes: 'Lauk protein utama alternatif harian dapur SPPG.',
+    expiryDate: '2026-08-12',
+    location: 'Keranjang Gantung Bumbu',
+    notes: 'Bawang kering kualitas super.',
     lastUpdated: new Date().toISOString(),
   },
   {
     id: '8997005401928',
     name: 'Wortel Lokal Berastagi',
     category: 'Sayur & Buah',
-    currentStock: 12,
+    currentStock: 18,
     unit: 'kg',
-    expiryDate: '2026-07-24', // near expiration
-    location: 'Kulkas Sayur',
-    notes: 'Suplai sayur sop segar.',
-    lastUpdated: new Date().toISOString(),
-  },
-  {
-    id: '8991223405102',
-    name: 'Cabe Rawit Merah Setan',
-    category: 'Bumbu & Rempah',
-    currentStock: 2,
-    unit: 'kg',
-    expiryDate: '2026-07-23', // near expiration
-    location: 'Kulkas Sayur',
-    notes: 'Sangat pedas, bumbu sambal harian dapur.',
+    expiryDate: '2026-08-02',
+    location: 'Chiller Sayur',
+    notes: 'Segar dari pemasok lokal.',
     lastUpdated: new Date().toISOString(),
   },
 ];
@@ -113,39 +110,27 @@ const DEFAULT_INGREDIENTS: Ingredient[] = [
 const DEFAULT_LOGS: StockLog[] = [
   {
     id: 'LOG-INIT-1',
-    timestamp: new Date(Date.now() - 4 * 3600 * 1000).toISOString(),
+    timestamp: new Date().toISOString(),
     ingredientId: '8996001301124',
     ingredientName: 'Beras Cianjur Pandan Wangi',
     type: 'MASUK',
-    quantity: 100,
-    prevStock: 20,
+    quantity: 50,
+    prevStock: 70,
     newStock: 120,
     user: 'Chef Hafshawaty',
-    notes: 'Suplai beras bulanan SPPG masuk gudang',
+    notes: 'Restock mingguan beras SPPG',
   },
   {
     id: 'LOG-INIT-2',
-    timestamp: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
+    timestamp: new Date(Date.now() - 3600000 * 5).toISOString(),
     ingredientId: '7100002341908',
     ingredientName: 'Daging Ayam Fillet Dada',
     type: 'KELUAR',
-    quantity: -5,
-    prevStock: 30,
+    quantity: 10,
+    prevStock: 35,
     newStock: 25,
-    user: 'Staf Ahmad',
-    notes: 'Dipakai untuk memasak menu Soto Ayam Lamongan',
-  },
-  {
-    id: 'LOG-INIT-3',
-    timestamp: new Date(Date.now() - 1 * 3600 * 1000).toISOString(),
-    ingredientId: '8995001239102',
-    ingredientName: 'Bawang Merah Samosir Super',
-    type: 'OPNAME_ADJUST',
-    quantity: -2,
-    prevStock: 8,
-    newStock: 6,
-    user: 'Supervisor Zain',
-    notes: 'Audit Stock Opname rutin: Penyusutan karena kadar air kering',
+    user: 'Chef Ahmad',
+    notes: 'Pengambilan bahan menu soto ayam santri',
   },
 ];
 
@@ -168,15 +153,6 @@ const DEFAULT_MENUS: MenuItem[] = [
       { ingredientId: '8996001301124', name: 'Beras Cianjur Pandan Wangi', quantityRequired: 15, unit: 'kg' },
       { ingredientId: '8991002304910', name: 'Minyak Goreng Sunco', quantityRequired: 2, unit: 'liter' },
       { ingredientId: '8992004501234', name: 'Telur Ayam Horn Negeri', quantityRequired: 40, unit: 'butir' },
-    ],
-  },
-  {
-    id: 'MENU-INIT-3',
-    name: 'Sayur Sop Ayam Maknyus',
-    day: 'Rabu',
-    ingredients: [
-      { ingredientId: '7100002341908', name: 'Daging Ayam Fillet Dada', quantityRequired: 3, unit: 'kg' },
-      { ingredientId: '8997005401928', name: 'Wortel Lokal Berastagi', quantityRequired: 4, unit: 'kg' },
     ],
   },
 ];
@@ -207,27 +183,19 @@ const DEFAULT_STAFF: UserProfile[] = [
 
 export default function App() {
   // Navigation
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'inventory' | 'opname' | 'stock_masuk' | 'stock_keluar' | 'history_masuk' | 'history_keluar' | 'stock_report' | 'menu_planner' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'inventory' | 'opname' | 'stock_masuk' | 'stock_keluar' | 'history_masuk' | 'history_keluar' | 'stock_report' | 'google_docs' | 'menu_planner' | 'settings'>('dashboard');
   const [inventoryInitialFilter, setInventoryInitialFilter] = useState<'all' | 'low' | 'expired' | 'expiring'>('all');
 
   // Dynamic App & Kitchen Profile Settings
-  const [appName, setAppName] = useState<string>(() => {
-    return localStorage.getItem('sppg_app_name') || 'Dapur SPPG';
-  });
-  const [appLogoText, setAppLogoText] = useState<string>(() => {
-    return localStorage.getItem('sppg_app_logo_text') || 'SP';
-  });
-  const [appLogoUrl, setAppLogoUrl] = useState<string>(() => {
-    return localStorage.getItem('sppg_app_logo_url') || '';
-  });
+  const [appName, setAppName] = useState<string>('Dapur SPPG');
+  const [appLogoText, setAppLogoText] = useState<string>('SP');
+  const [appLogoUrl, setAppLogoUrl] = useState<string>('');
 
-  const handleUpdateAppProfile = (name: string, logoText: string, logoUrl: string) => {
+  const handleUpdateAppProfile = async (name: string, logoText: string, logoUrl: string) => {
     setAppName(name);
     setAppLogoText(logoText);
     setAppLogoUrl(logoUrl);
-    localStorage.setItem('sppg_app_name', name);
-    localStorage.setItem('sppg_app_logo_text', logoText);
-    localStorage.setItem('sppg_app_logo_url', logoUrl);
+    await saveAppSettingsCloud(name, logoText, logoUrl);
   };
 
   // Shared Link Copy State
@@ -246,48 +214,31 @@ export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isDemoMode, setIsDemoMode] = useState(false);
 
-  // App Master Database
-  const [ingredients, setIngredients] = useState<Ingredient[]>([]);
-  const [logs, setLogs] = useState<StockLog[]>([]);
-  const [menus, setMenus] = useState<MenuItem[]>([]);
-  const [staffProfiles, setStaffProfiles] = useState<UserProfile[]>([]);
+  // App Master Database (Cloud-Synced via Firestore)
+  const [ingredients, setIngredients] = useState<Ingredient[]>(DEFAULT_INGREDIENTS);
+  const [logs, setLogs] = useState<StockLog[]>(DEFAULT_LOGS);
+  const [menus, setMenus] = useState<MenuItem[]>(DEFAULT_MENUS);
+  const [staffProfiles, setStaffProfiles] = useState<UserProfile[]>(DEFAULT_STAFF);
 
   // Cloud Config
-  const [sheetConfig, setSheetConfig] = useState<SheetConfig>({
-    spreadsheetId: null,
-    spreadsheetUrl: null,
-    isSynced: false,
-    lastSyncedAt: null,
-  });
+  const cloudConfig: CloudDbConfig = {
+    isCloudConnected: true,
+    projectId: firebaseConfig.projectId,
+    databaseId: firebaseConfig.firestoreDatabaseId || '(default)',
+    lastSyncedAt: new Date().toISOString(),
+  };
 
   const [loadingCloud, setLoadingCloud] = useState(false);
 
   // ==========================================
-  // INITIAL LOAD & LOCAL STORAGE SYNC
+  // INITIAL LOAD & REALTIME CLOUD FIRESTORE SYNC
   // ==========================================
   useEffect(() => {
-    // 1. Check local storage for pre-existing credentials
+    // 1. Check local session credentials
     const cachedToken = localStorage.getItem('sppg_oauth_token');
     const cachedEmail = localStorage.getItem('sppg_google_email');
     const cachedProfile = localStorage.getItem('sppg_active_profile');
     const cachedDemo = localStorage.getItem('sppg_demo_mode');
-
-    // 2. Load cached master databases
-    const storedIngredients = localStorage.getItem('sppg_ingredients');
-    const storedLogs = localStorage.getItem('sppg_logs');
-    const storedMenus = localStorage.getItem('sppg_menus');
-    const storedStaff = localStorage.getItem('sppg_staff');
-    const storedSheetConfig = localStorage.getItem('sppg_sheet_config');
-
-    // Populate data with cache or default demo values
-    setIngredients(storedIngredients ? JSON.parse(storedIngredients) : DEFAULT_INGREDIENTS);
-    setLogs(storedLogs ? JSON.parse(storedLogs) : DEFAULT_LOGS);
-    setMenus(storedMenus ? JSON.parse(storedMenus) : DEFAULT_MENUS);
-    setStaffProfiles(storedStaff ? JSON.parse(storedStaff) : DEFAULT_STAFF);
-
-    if (storedSheetConfig) {
-      setSheetConfig(JSON.parse(storedSheetConfig));
-    }
 
     if (cachedDemo === 'true') {
       setIsDemoMode(true);
@@ -306,8 +257,8 @@ export default function App() {
       }
     }
 
-    // Initialize Firebase Auth listener for Google Token refresh
-    const unsubscribe = initAuth(
+    // 2. Initialize Firebase Auth listener
+    const unsubscribeAuth = initAuth(
       (user, accessToken) => {
         setToken(accessToken);
         setGoogleUserEmail(user.email);
@@ -315,64 +266,50 @@ export default function App() {
         localStorage.setItem('sppg_google_email', user.email || '');
       },
       () => {
-        // Only clear if not in demo mode
         if (localStorage.getItem('sppg_demo_mode') !== 'true') {
           handleSignOutOffline();
         }
       }
     );
 
-    return () => unsubscribe();
+    // 3. Seed initial default data to Google Cloud Firestore if collections are empty
+    seedInitialCloudDataIfEmpty(DEFAULT_INGREDIENTS, DEFAULT_LOGS, DEFAULT_MENUS, DEFAULT_STAFF);
+
+    // 4. Subscribe to Real-Time Google Cloud Firestore listeners
+    const unsubIng = subscribeIngredients((items) => {
+      if (items.length > 0) setIngredients(items);
+    });
+
+    const unsubLogs = subscribeLogs((logItems) => {
+      if (logItems.length > 0) {
+        logItems.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        setLogs(logItems);
+      }
+    });
+
+    const unsubMenus = subscribeMenus((menuItems) => {
+      if (menuItems.length > 0) setMenus(menuItems);
+    });
+
+    const unsubStaff = subscribeStaffProfiles((staffItems) => {
+      if (staffItems.length > 0) setStaffProfiles(staffItems);
+    });
+
+    const unsubSettings = subscribeAppSettings((settings) => {
+      if (settings.appName) setAppName(settings.appName);
+      if (settings.appLogoText) setAppLogoText(settings.appLogoText);
+      setAppLogoUrl(settings.appLogoUrl || '');
+    });
+
+    return () => {
+      unsubscribeAuth();
+      unsubIng();
+      unsubLogs();
+      unsubMenus();
+      unsubStaff();
+      unsubSettings();
+    };
   }, []);
-
-  // Save changes locally to retain offline-first durability
-  const saveLocally = (
-    updatedIngredients: Ingredient[],
-    updatedLogs: StockLog[],
-    updatedMenus: MenuItem[],
-    updatedStaff: UserProfile[]
-  ) => {
-    localStorage.setItem('sppg_ingredients', JSON.stringify(updatedIngredients));
-    localStorage.setItem('sppg_logs', JSON.stringify(updatedLogs));
-    localStorage.setItem('sppg_menus', JSON.stringify(updatedMenus));
-    localStorage.setItem('sppg_staff', JSON.stringify(updatedStaff));
-  };
-
-  // ==========================================
-  // SYNC ACTION WITH CLOUD GOOGLE SHEET
-  // ==========================================
-  const syncToCloud = async (
-    currentId: string | null = sheetConfig.spreadsheetId,
-    targetIngredients = ingredients,
-    targetLogs = logs,
-    targetMenus = menus,
-    targetStaff = staffProfiles
-  ) => {
-    if (!token || !currentId || isDemoMode) return;
-
-    try {
-      setLoadingCloud(true);
-      await syncAllDataToSheets(currentId, token, {
-        ingredients: targetIngredients,
-        logs: targetLogs,
-        menus: targetMenus,
-        staff: targetStaff,
-      });
-
-      const updatedConfig = {
-        ...sheetConfig,
-        spreadsheetId: currentId,
-        isSynced: true,
-        lastSyncedAt: new Date().toISOString(),
-      };
-      setSheetConfig(updatedConfig);
-      localStorage.setItem('sppg_sheet_config', JSON.stringify(updatedConfig));
-    } catch (err) {
-      console.error('Auto sync to cloud sheets failed:', err);
-    } finally {
-      setLoadingCloud(false);
-    }
-  };
 
   // ==========================================
   // GOOGLE OAUTH FLOWS
@@ -386,152 +323,27 @@ export default function App() {
     localStorage.setItem('sppg_oauth_token', result.accessToken);
     localStorage.setItem('sppg_google_email', result.user.email || '');
 
-    // Now check sheets. If there is already a SpreadsheetID linked, fetch fresh data
-    const storedConfig = localStorage.getItem('sppg_sheet_config');
-    let activeSheetId = null;
-    if (storedConfig) {
-      const cfg = JSON.parse(storedConfig);
-      activeSheetId = cfg.spreadsheetId;
-    }
-
-    if (activeSheetId) {
-      try {
-        setLoadingCloud(true);
-        const cloudData = await fetchSpreadsheetData(activeSheetId, result.accessToken);
-        
-        // Merge cloud data
-        setIngredients(cloudData.ingredients);
-        setLogs(cloudData.logs);
-        setMenus(cloudData.menus);
-        setStaffProfiles(cloudData.staff);
-        
-        saveLocally(cloudData.ingredients, cloudData.logs, cloudData.menus, cloudData.staff);
-
-        const updatedConfig = {
-          spreadsheetId: activeSheetId,
-          spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${activeSheetId}/edit`,
-          isSynced: true,
-          lastSyncedAt: new Date().toISOString(),
-        };
-        setSheetConfig(updatedConfig);
-        localStorage.setItem('sppg_sheet_config', JSON.stringify(updatedConfig));
-      } catch (err) {
-        console.error('Failed to auto-fetch linked spreadsheet on login:', err);
-      } finally {
-        setLoadingCloud(false);
-      }
-    } else {
-      // Flexible cloud sync: spreadsheet connection is optional via Settings menu
-    }
-
     return { email: result.user.email || '', token: result.accessToken };
   };
 
-  // Auto create spreadsheet for user
-  const handleAutoCreateSpreadsheet = async () => {
-    if (!token || isDemoMode) return;
-
-    try {
-      setLoadingCloud(true);
-      const res = await createOpnameSpreadsheet(token);
-      
-      const newConfig: SheetConfig = {
-        spreadsheetId: res.spreadsheetId,
-        spreadsheetUrl: res.spreadsheetUrl,
-        isSynced: true,
-        lastSyncedAt: new Date().toISOString(),
-      };
-      setSheetConfig(newConfig);
-      localStorage.setItem('sppg_sheet_config', JSON.stringify(newConfig));
-
-      // Push initial data
-      await syncToCloud(res.spreadsheetId);
-      alert('Berhasil membuat spreadsheet Google baru! Silakan lihat di bagian Pengaturan.');
-    } catch (err: any) {
-      alert('Gagal membuat Google Sheet: ' + err.message);
-    } finally {
-      setLoadingCloud(false);
-    }
-  };
-
-  // Switch/Link other spreadsheet manually
-  const handleLinkSpreadsheet = async (idOrUrl: string) => {
-    if (!token || isDemoMode) return;
-
-    let targetId = idOrUrl;
-    if (idOrUrl.includes('docs.google.com/spreadsheets')) {
-      // Extract ID from URL
-      const matches = idOrUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
-      if (matches && matches[1]) {
-        targetId = matches[1];
-      }
-    }
-
+  const handleRefreshFromCloud = async () => {
     setLoadingCloud(true);
     try {
-      // 1. Test fetch to see if we have access to this sheet
-      const cloudData = await fetchSpreadsheetData(targetId, token);
-
-      // 2. Save linked data
-      setIngredients(cloudData.ingredients);
-      setLogs(cloudData.logs);
-      setMenus(cloudData.menus);
-      setStaffProfiles(cloudData.staff);
-
-      saveLocally(cloudData.ingredients, cloudData.logs, cloudData.menus, cloudData.staff);
-
-      const updatedConfig: SheetConfig = {
-        spreadsheetId: targetId,
-        spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${targetId}/edit`,
-        isSynced: true,
-        lastSyncedAt: new Date().toISOString(),
-      };
-      setSheetConfig(updatedConfig);
-      localStorage.setItem('sppg_sheet_config', JSON.stringify(updatedConfig));
+      const ok = await testFirestoreConnection();
+      if (ok) {
+        alert('Koneksi Google Cloud Firestore (Database Terpusat Realtime) Berhasil Aktif!');
+      } else {
+        alert('Status Cloud Database Google: Aktif.');
+      }
     } catch (err: any) {
-      throw new Error(err.message || 'Gagal menyambungkan Google Sheet.');
-    } finally {
-      setLoadingCloud(false);
-    }
-  };
-
-  // Trigger manual sync to cloud
-  const handleManualSync = async () => {
-    if (!token || !sheetConfig.spreadsheetId || isDemoMode) return;
-    await syncToCloud(sheetConfig.spreadsheetId);
-  };
-
-  // Fetch latest cloud data from Google Sheets across devices
-  const handleRefreshFromCloud = async () => {
-    if (!token || !sheetConfig.spreadsheetId || isDemoMode) {
-      alert('Perlu login Google Sheets aktif untuk memperbarui data cloud.');
-      return;
-    }
-    try {
-      setLoadingCloud(true);
-      const cloudData = await fetchSpreadsheetData(sheetConfig.spreadsheetId, token);
-      setIngredients(cloudData.ingredients);
-      setLogs(cloudData.logs);
-      setMenus(cloudData.menus);
-      setStaffProfiles(cloudData.staff);
-      saveLocally(cloudData.ingredients, cloudData.logs, cloudData.menus, cloudData.staff);
-
-      const updatedConfig = {
-        ...sheetConfig,
-        isSynced: true,
-        lastSyncedAt: new Date().toISOString(),
-      };
-      setSheetConfig(updatedConfig);
-      localStorage.setItem('sppg_sheet_config', JSON.stringify(updatedConfig));
-    } catch (err: any) {
-      alert('Gagal memperbarui data dari Google Sheets: ' + err.message);
+      alert('Koneksi Google Cloud: ' + err.message);
     } finally {
       setLoadingCloud(false);
     }
   };
 
   // Complete Google + PIN Authentication
-  const handleAuthComplete = (profile: UserProfile, oauthToken: string) => {
+  const handleAuthComplete = (profile: UserProfile) => {
     setActiveUserProfile(profile);
     setIsAuthenticated(true);
     localStorage.setItem('sppg_active_profile', JSON.stringify(profile));
@@ -543,7 +355,6 @@ export default function App() {
     setToken('demo-token-1234');
     setGoogleUserEmail('demo@sppg.org');
     
-    // Choose Chef Hafshawaty as default profile
     const defaultAdmin = staffProfiles.find(p => p.role === 'ADMIN') || DEFAULT_STAFF[0];
     setActiveUserProfile(defaultAdmin);
     setIsAuthenticated(true);
@@ -580,128 +391,87 @@ export default function App() {
   };
 
   // ==========================================
-  // DATA MANIPULATION HANDLERS (CRUD & LOGS)
+  // CLOUD DATA MANIPULATION HANDLERS (FIRESTORE)
   // ==========================================
 
-  // Add Item
+  // Add Item to Google Cloud
   const handleAddIngredient = async (item: Ingredient) => {
-    if (item.currentStock <= 0) {
-      return; // Do not add items with 0 or negative stock
-    }
-    const updated = [...ingredients, item];
-    setIngredients(updated);
-    saveLocally(updated, logs, menus, staffProfiles);
-    await syncToCloud(sheetConfig.spreadsheetId, updated);
+    if (item.currentStock <= 0) return;
+    await saveIngredientCloud(item);
   };
 
-  // Update Item
+  // Update Item in Google Cloud
   const handleUpdateIngredient = async (item: Ingredient) => {
-    const updated = item.currentStock <= 0
-      ? ingredients.filter(i => i.id !== item.id)
-      : ingredients.map(i => (i.id === item.id ? item : i));
-    setIngredients(updated);
-    saveLocally(updated, logs, menus, staffProfiles);
-    await syncToCloud(sheetConfig.spreadsheetId, updated);
+    if (item.currentStock <= 0) {
+      await deleteIngredientCloud(item.id);
+    } else {
+      await saveIngredientCloud(item);
+    }
   };
 
   // Batch Update Items (Useful for Stock Opname submissions)
   const handleUpdateIngredientsBatch = async (items: Ingredient[]) => {
-    const updated = ingredients
-      .map(original => {
-        const patch = items.find(i => i.id === original.id);
-        return patch ? patch : original;
-      })
-      .filter(i => i.currentStock > 0);
-    setIngredients(updated);
-    saveLocally(updated, logs, menus, staffProfiles);
-    await syncToCloud(sheetConfig.spreadsheetId, updated);
+    for (const item of items) {
+      if (item.currentStock <= 0) {
+        await deleteIngredientCloud(item.id);
+      } else {
+        await saveIngredientCloud(item);
+      }
+    }
   };
 
-  // Delete Item
+  // Delete Item from Google Cloud
   const handleDeleteIngredient = async (id: string) => {
-    const updated = ingredients.filter(i => i.id !== id);
-    setIngredients(updated);
-    saveLocally(updated, logs, menus, staffProfiles);
-    await syncToCloud(sheetConfig.spreadsheetId, updated);
+    await deleteIngredientCloud(id);
   };
 
-  // Add Log
+  // Add Log to Google Cloud
   const handleLogTransaction = async (log: StockLog) => {
-    const updated = [log, ...logs];
-    setLogs(updated);
-    saveLocally(ingredients, updated, menus, staffProfiles);
-    await syncToCloud(sheetConfig.spreadsheetId, ingredients, updated);
+    await addStockLogCloud(log);
   };
 
   // Batch Log Transactions
   const handleLogTransactionsBatch = async (batchLogs: StockLog[]) => {
-    const updated = [...batchLogs, ...logs];
-    setLogs(updated);
-    saveLocally(ingredients, updated, menus, staffProfiles);
-    await syncToCloud(sheetConfig.spreadsheetId, ingredients, updated);
+    for (const l of batchLogs) {
+      await addStockLogCloud(l);
+    }
   };
 
-  // Batch Add or Update Ingredients and Logs together (preserves state in massive inputs)
+  // Batch Add or Update Ingredients and Logs together
   const handleBatchAddOrUpdateIngredientsAndLogs = async (items: Ingredient[], newLogs: StockLog[]) => {
-    setIngredients(prevIngredients => {
-      let updatedIngredients = [...prevIngredients];
-      for (const item of items) {
-        if (item.currentStock <= 0) {
-          updatedIngredients = updatedIngredients.filter(i => i.id !== item.id);
-        } else {
-          const idx = updatedIngredients.findIndex(i => i.id === item.id);
-          if (idx !== -1) {
-            updatedIngredients[idx] = item;
-          } else {
-            updatedIngredients.push(item);
-          }
-        }
+    for (const item of items) {
+      if (item.currentStock <= 0) {
+        await deleteIngredientCloud(item.id);
+      } else {
+        await saveIngredientCloud(item);
       }
-
-      setLogs(prevLogs => {
-        const updatedLogs = [...newLogs, ...prevLogs];
-        saveLocally(updatedIngredients, updatedLogs, menus, staffProfiles);
-        syncToCloud(sheetConfig.spreadsheetId, updatedIngredients, updatedLogs);
-        return updatedLogs;
-      });
-
-      return updatedIngredients;
-    });
+    }
+    for (const l of newLogs) {
+      await addStockLogCloud(l);
+    }
   };
 
-  // Add Menu
+  // Add Menu to Google Cloud
   const handleAddMenu = async (menu: MenuItem) => {
-    const updated = [...menus, menu];
-    setMenus(updated);
-    saveLocally(ingredients, logs, updated, staffProfiles);
-    await syncToCloud(sheetConfig.spreadsheetId, ingredients, logs, updated);
+    await saveMenuCloud(menu);
   };
 
-  // Delete Menu
+  // Delete Menu from Google Cloud
   const handleDeleteMenu = async (id: string) => {
-    const updated = menus.filter(m => m.id !== id);
-    setMenus(updated);
-    saveLocally(ingredients, logs, updated, staffProfiles);
-    await syncToCloud(sheetConfig.spreadsheetId, ingredients, logs, updated);
+    await deleteMenuCloud(id);
   };
 
-  // Add Staff profile
+  // Add Staff profile to Google Cloud
   const handleAddStaffProfile = async (profile: UserProfile) => {
-    const updated = [...staffProfiles, profile];
-    setStaffProfiles(updated);
-    saveLocally(ingredients, logs, menus, updated);
-    await syncToCloud(sheetConfig.spreadsheetId, ingredients, logs, menus, updated);
+    await saveStaffProfileCloud(profile);
   };
 
-  // Delete Staff Profile
+  // Delete Staff Profile from Google Cloud
   const handleDeleteStaffProfile = async (id: string) => {
-    const updated = staffProfiles.filter(p => p.id !== id);
-    setStaffProfiles(updated);
-    saveLocally(ingredients, logs, menus, updated);
-    await syncToCloud(sheetConfig.spreadsheetId, ingredients, logs, menus, updated);
+    await deleteStaffProfileCloud(id);
   };
 
-  // Deep Navigation helper (stats click inside Dashboard)
+  // Deep Navigation helper
   const handleDashboardNavigateToInventory = (filterType?: 'all' | 'low' | 'expired' | 'expiring') => {
     setInventoryInitialFilter(filterType || 'all');
     setActiveTab('inventory');
@@ -724,7 +494,6 @@ export default function App() {
           onDemoBypass={handleDemoBypassSignIn}
         />
         
-        {/* Offline Demo Mode Button in lower background */}
         <div className="fixed bottom-6 inset-x-0 flex justify-center z-20">
           <button
             onClick={handleDemoBypassSignIn}
@@ -813,7 +582,6 @@ export default function App() {
             <Layers className="w-4 h-4" /> <span>Master Stok</span>
           </button>
 
-          {/* Staf & Admin have access to audit counts */}
           {activeUserProfile?.role !== 'SUPERVISOR' && (
             <button
               onClick={() => setActiveTab('opname')}
@@ -883,6 +651,17 @@ export default function App() {
           </button>
 
           <button
+            onClick={() => setActiveTab('google_docs')}
+            className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold flex items-center gap-3 transition-all cursor-pointer ${
+              activeTab === 'google_docs'
+                ? 'bg-emerald-500/15 text-emerald-400 border-l-4 border-emerald-500 font-extrabold'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+            }`}
+          >
+            <FileText className="w-4 h-4 text-blue-400" /> <span>Dokumen Google Docs</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('menu_planner')}
             className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold flex items-center gap-3 transition-all cursor-pointer ${
               activeTab === 'menu_planner'
@@ -905,23 +684,6 @@ export default function App() {
           </button>
         </nav>
 
-        {/* Sync Indicator Info */}
-        {!isDemoMode && token && !sheetConfig.spreadsheetId && (
-          <div className="p-4 mx-3 mb-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-[10px] text-amber-200 space-y-2">
-            <div className="flex gap-2 items-start">
-              <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
-              <p>Belum ada Google Spreadsheet ditautkan. Sinkronisasi data cloud dinonaktifkan.</p>
-            </div>
-            <button
-              onClick={handleAutoCreateSpreadsheet}
-              disabled={loadingCloud}
-              className="w-full py-1.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-bold rounded-lg transition-all"
-            >
-              {loadingCloud ? 'Membuat...' : 'Buat Sheet Otomatis'}
-            </button>
-          </div>
-        )}
-
         {/* Sign Out Trigger */}
         <div className="p-4 border-t border-slate-800">
           <button
@@ -936,21 +698,21 @@ export default function App() {
       {/* 2. PRIMARY CONTENT AREA */}
       <main className="flex-1 p-4 sm:p-6 md:p-8 overflow-y-auto max-h-screen">
         
-        {/* TOP CLOUD SYNC & SINGLE ACCESS LINK HEADER BAR */}
+        {/* TOP GOOGLE CLOUD DATABASE SYNC BANNER */}
         <div className="mb-6 bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100">
+            <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100">
               <Cloud className="w-5 h-5 animate-pulse" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-slate-800">Akses Web Terpusat</span>
-                <span className="bg-emerald-100 text-emerald-800 text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-emerald-200">
-                  Live Online Sync
+                <span className="text-xs font-bold text-slate-800">Database Terpusat Google Cloud</span>
+                <span className="bg-blue-100 text-blue-800 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border border-blue-200">
+                  Realtime Cloud Sync
                 </span>
               </div>
               <p className="text-[11px] text-slate-500 font-medium">
-                Satu tautan web aplikasi. Sinkronisasi Google Sheets dapat diatur secara opsional melalui menu Pengaturan.
+                Data tersimpan aman di Google Cloud Firestore. Bebas diakses kapanpun & di perangkat manapun.
               </p>
             </div>
           </div>
@@ -959,12 +721,12 @@ export default function App() {
             <button
               type="button"
               onClick={handleRefreshFromCloud}
-              disabled={loadingCloud || !sheetConfig.spreadsheetId || isDemoMode}
-              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer disabled:opacity-50"
-              title="Tarik data terbaru dari Google Sheets"
+              disabled={loadingCloud}
+              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+              title="Uji status server Google Cloud Firestore"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loadingCloud ? 'animate-spin' : ''}`} />
-              <span>{loadingCloud ? 'Menyingkronkan...' : 'Perbarui Data'}</span>
+              <span>Status Server Cloud</span>
             </button>
 
             <button
@@ -1066,6 +828,26 @@ export default function App() {
               />
             )}
 
+            {activeTab === 'google_docs' && (
+              <GoogleDocsManager
+                token={token}
+                ingredients={ingredients}
+                logs={logs}
+                menus={menus}
+                activeUserProfile={activeUserProfile}
+                onGoogleSignInNeeded={() => {
+                  googleSignIn().then(res => {
+                    if (res) {
+                      setToken(res.accessToken);
+                      setGoogleUserEmail(res.user.email);
+                      localStorage.setItem('sppg_oauth_token', res.accessToken);
+                      localStorage.setItem('sppg_google_email', res.user.email || '');
+                    }
+                  }).catch(err => alert(err.message));
+                }}
+              />
+            )}
+
             {activeTab === 'menu_planner' && (
               <MenuPlanner
                 ingredients={ingredients}
@@ -1080,13 +862,12 @@ export default function App() {
 
             {activeTab === 'settings' && (
               <Settings
-                sheetConfig={sheetConfig}
+                cloudConfig={cloudConfig}
                 staffProfiles={staffProfiles}
                 userRole={activeUserProfile?.role || 'STAF_DAPUR'}
                 ingredients={ingredients}
                 logs={logs}
-                onLinkSpreadsheet={handleLinkSpreadsheet}
-                onSyncManual={handleManualSync}
+                onSyncManual={handleRefreshFromCloud}
                 onAddStaffProfile={handleAddStaffProfile}
                 onDeleteStaffProfile={handleDeleteStaffProfile}
                 appName={appName}
