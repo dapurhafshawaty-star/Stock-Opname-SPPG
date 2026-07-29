@@ -43,6 +43,15 @@ export default function Settings({
   const [localLogoText, setLocalLogoText] = useState(appLogoText);
   const [localLogoUrl, setLocalLogoUrl] = useState(appLogoUrl);
   const [uploadNotice, setUploadNotice] = useState<string | null>(null);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileSavedSuccess, setProfileSavedSuccess] = useState(false);
+
+  // Keep local state in sync when props update
+  React.useEffect(() => {
+    setLocalAppName(appName);
+    setLocalLogoText(appLogoText);
+    setLocalLogoUrl(appLogoUrl);
+  }, [appName, appLogoText, appLogoUrl]);
 
   // File Input Ref for Logo Upload
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -437,15 +446,43 @@ export default function Settings({
                 />
               </div>
 
+              {/* Action Button & Confirmation */}
               <button
-                onClick={() => {
-                  onUpdateAppProfile(localAppName, localLogoText, localLogoUrl);
-                  alert('Profil aplikasi berhasil diperbarui di Google Cloud!');
+                type="button"
+                disabled={profileSaving}
+                onClick={async () => {
+                  setProfileSaving(true);
+                  try {
+                    await onUpdateAppProfile(localAppName || 'Dapur SPPG', localLogoText || 'SP', localLogoUrl);
+                    setProfileSavedSuccess(true);
+                    setTimeout(() => setProfileSavedSuccess(false), 4000);
+                  } catch (err: any) {
+                    alert('Gagal menyimpan profil: ' + err.message);
+                  } finally {
+                    setProfileSaving(false);
+                  }
                 }}
-                className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm disabled:opacity-50"
               >
-                Simpan Profil Aplikasi
+                {profileSaving ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Menyimpan ke Google Cloud...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    <span>Simpan Profil Aplikasi & Logo</span>
+                  </>
+                )}
               </button>
+
+              {profileSavedSuccess && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-bold flex items-center gap-2 animate-fadeIn">
+                  <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>Profil Dapur & Aplikasi berhasil diperbarui di Google Cloud!</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
