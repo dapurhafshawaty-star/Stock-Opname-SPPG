@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Ingredient, StockLog, UserProfile, UserRole, CloudDbConfig } from '../types';
 import { jsPDF } from 'jspdf';
-import { Database, Users, Trash2, UserPlus, RefreshCw, Download, FileText, Check, AlertCircle, Info, Cloud, ShieldCheck, Sparkles } from 'lucide-react';
+import { Database, Users, Trash2, UserPlus, RefreshCw, Download, FileText, Check, AlertCircle, Info, Cloud, ShieldCheck, Sparkles, Upload, Image as ImageIcon, X } from 'lucide-react';
 
 interface SettingsProps {
   cloudConfig: CloudDbConfig;
@@ -42,6 +42,38 @@ export default function Settings({
   const [localAppName, setLocalAppName] = useState(appName);
   const [localLogoText, setLocalLogoText] = useState(appLogoText);
   const [localLogoUrl, setLocalLogoUrl] = useState(appLogoUrl);
+  const [uploadNotice, setUploadNotice] = useState<string | null>(null);
+
+  // File Input Ref for Logo Upload
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Handle Logo Upload from PC / Device
+  const handleLogoFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      alert('Silakan pilih file gambar (PNG, JPG, WEBP, SVG).');
+      return;
+    }
+
+    // Limit file size (e.g. 3MB max)
+    if (file.size > 3 * 1024 * 1024) {
+      alert('Ukuran file logo terlalu besar. Harap pilih gambar di bawah 3 MB.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64Data = event.target?.result as string;
+      if (base64Data) {
+        setLocalLogoUrl(base64Data);
+        setUploadNotice('Logo dari PC berhasil dimuat! Klik "Simpan Profil Aplikasi" untuk menyimpan ke Google Cloud.');
+        setTimeout(() => setUploadNotice(null), 6000);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Sync trigger
   const [syncLoading, setSyncLoading] = useState(false);
@@ -346,8 +378,56 @@ export default function Settings({
                 </div>
               </div>
 
+              {/* Import Logo from PC Section */}
+              <div className="space-y-2 pt-1">
+                <label className="text-[10px] font-bold text-slate-400 block uppercase">Pilih Logo Aplikasi</label>
+                
+                {/* Hidden File Input */}
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleLogoFileUpload}
+                  accept="image/png, image/jpeg, image/webp, image/svg+xml"
+                  className="hidden"
+                />
+
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex-1 py-2 px-3 bg-slate-800 hover:bg-slate-900 active:scale-95 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs"
+                  >
+                    <Upload className="w-4 h-4 text-emerald-400" />
+                    <span>Import Logo dari PC</span>
+                  </button>
+
+                  {localLogoUrl && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLocalLogoUrl('');
+                        setUploadNotice('Logo dihapus. Klik "Simpan Profil Aplikasi" untuk mengonfirmasi.');
+                        setTimeout(() => setUploadNotice(null), 5000);
+                      }}
+                      className="py-2 px-3 bg-red-50 hover:bg-red-100 text-red-600 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer border border-red-200"
+                      title="Hapus Logo Custom"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Hapus Logo</span>
+                    </button>
+                  )}
+                </div>
+
+                {uploadNotice && (
+                  <div className="p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg text-[11px] font-bold flex items-center gap-1.5 animate-fadeIn">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>{uploadNotice}</span>
+                  </div>
+                )}
+              </div>
+
               <div>
-                <label className="text-[10px] font-bold text-slate-400 block mb-1 uppercase">URL Gambar Logo Custom (Opsional)</label>
+                <label className="text-[10px] font-bold text-slate-400 block mb-1 uppercase">Atau URL Gambar Logo (Opsional)</label>
                 <input
                   type="text"
                   value={localLogoUrl}

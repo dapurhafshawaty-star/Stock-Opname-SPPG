@@ -32,34 +32,52 @@ export default function GoogleDocsManager({
   const [selectedDocId, setSelectedDocId] = useState<string>('');
   const [customNote, setCustomNote] = useState('');
   const [appending, setAppending] = useState(false);
+  const [isAuthError, setIsAuthError] = useState(false);
 
   useEffect(() => {
-    if (token) {
+    if (token && token !== 'demo-token-1234') {
       loadDocsList();
+    } else {
+      setIsAuthError(true);
     }
   }, [token]);
 
   const loadDocsList = async () => {
-    if (!token) return;
+    if (!token || token === 'demo-token-1234') {
+      setIsAuthError(true);
+      return;
+    }
     setFetchingDocs(true);
     setError(null);
     try {
       const docs = await fetchUserGoogleDocs(token);
       setUserDocs(docs);
+      setIsAuthError(false);
       if (docs.length > 0 && !selectedDocId) {
         setSelectedDocId(docs[0].id);
       }
     } catch (err: any) {
-      console.error('Error fetching Google Docs:', err);
-      // Don't block UI if permission error
+      console.error('Notice fetching Google Docs:', err);
+      if (err?.isAuthError || err?.message?.includes('Google') || err?.message?.includes('otentikasi') || err?.message?.includes('invalid authentication credentials')) {
+        setIsAuthError(true);
+      } else {
+        setError(err?.message || 'Gagal mengambil daftar dokumen Google Docs.');
+      }
     } finally {
       setFetchingDocs(false);
     }
   };
 
+  const handleConnectGoogle = async () => {
+    if (onGoogleSignInNeeded) {
+      setError(null);
+      await onGoogleSignInNeeded();
+    }
+  };
+
   const handleExportToGoogleDoc = async () => {
-    if (!token) {
-      if (onGoogleSignInNeeded) onGoogleSignInNeeded();
+    if (!token || token === 'demo-token-1234' || isAuthError) {
+      await handleConnectGoogle();
       return;
     }
 
@@ -84,8 +102,13 @@ export default function GoogleDocsManager({
       setSuccessMsg('Laporan Stock Opname berhasil dibuat di Google Docs!');
       await loadDocsList();
     } catch (err: any) {
-      console.error('Export Google Doc Error:', err);
-      setError(err?.message || 'Gagal membuat dokumen di Google Docs.');
+      console.error('Export Google Doc Notice:', err);
+      if (err?.isAuthError || err?.message?.includes('invalid authentication credentials')) {
+        setIsAuthError(true);
+        setError('Izin Google OAuth diperlukan untuk membuat dokumen. Silakan klik tombol "Hubungkan Akun Google" di bawah.');
+      } else {
+        setError(err?.message || 'Gagal membuat dokumen di Google Docs.');
+      }
     } finally {
       setLoading(false);
     }
@@ -129,14 +152,18 @@ export default function GoogleDocsManager({
             Buat laporan fisik resmi, catatan katering, dan resume stok barang dapur otomatis langsung di Google Docs. Dokumen tersimpan rapi di Google Drive akun Anda.
           </p>
 
-          {!token && (
-            <div className="pt-2">
+          {(!token || token === 'demo-token-1234' || isAuthError) && (
+            <div className="pt-2 flex flex-wrap items-center gap-3">
               <button
-                onClick={onGoogleSignInNeeded}
-                className="px-5 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold rounded-xl text-xs transition-all shadow-md flex items-center gap-2 cursor-pointer"
+                onClick={handleConnectGoogle}
+                className="px-5 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold rounded-xl text-xs transition-all shadow-md flex items-center gap-2 cursor-pointer active:scale-95"
               >
-                <Sparkles className="w-4 h-4 text-slate-900" /> Masuk Google untuk Mengaktifkan Google Docs
+                <Sparkles className="w-4 h-4 text-slate-900" />
+                <span>Hubungkan / Masuk Kembali Akun Google</span>
               </button>
+              <span className="text-[11px] text-blue-200/90 italic">
+                (Akses Google Docs memerlukan izin OAuth Google Drive & Docs)
+              </span>
             </div>
           )}
         </div>

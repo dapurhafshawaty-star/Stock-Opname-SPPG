@@ -13,6 +13,12 @@ export interface GoogleDocFile {
 
 // Helper for Google API fetch
 async function docsFetch(url: string, token: string, options: RequestInit = {}) {
+  if (!token || token === 'demo-token-1234') {
+    const err = new Error('Izin Google OAuth tidak ditemukan atau berada dalam Mode Demo. Silakan klik "Hubungkan Akun Google" untuk mengizinkan akses Google Docs.');
+    (err as any).isAuthError = true;
+    throw err;
+  }
+
   const headers = {
     'Authorization': `Bearer ${token}`,
     'Content-Type': 'application/json',
@@ -22,7 +28,15 @@ async function docsFetch(url: string, token: string, options: RequestInit = {}) 
   const response = await fetch(url, { ...options, headers });
   if (!response.ok) {
     const errorBody = await response.json().catch(() => ({}));
-    throw new Error(errorBody?.error?.message || `Google Docs API Error (Status ${response.status})`);
+    const rawMsg = errorBody?.error?.message || `Google Docs API Error (Status ${response.status})`;
+    
+    if (response.status === 401 || rawMsg.toLowerCase().includes('invalid authentication credentials') || rawMsg.toLowerCase().includes('unauthorized') || rawMsg.toLowerCase().includes('oauth')) {
+      const authErr = new Error('Sesi otentikasi Google telah kadaluwarsa atau membutuhkan izin akses ulang. Silakan klik "Hubungkan Akun Google".');
+      (authErr as any).isAuthError = true;
+      throw authErr;
+    }
+
+    throw new Error(rawMsg);
   }
   return response.json();
 }
