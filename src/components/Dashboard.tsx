@@ -13,6 +13,9 @@ interface DashboardProps {
 export default function Dashboard({ ingredients, logs, onNavigateToInventory }: DashboardProps) {
   // 1. Calculate Metrics
   const totalItems = ingredients.length;
+  const totalStockSum = useMemo(() => {
+    return ingredients.reduce((sum, item) => sum + (item.currentStock || 0), 0);
+  }, [ingredients]);
   const outOfStockItems = ingredients.filter(item => item.currentStock <= 0);
   const totalTransactions = logs.length;
   
@@ -194,20 +197,28 @@ export default function Dashboard({ ingredients, logs, onNavigateToInventory }: 
           </div>
         </motion.div>
 
-        {/* Total Transactions */}
+        {/* Total Bahan Baku Card */}
         <motion.div
           whileHover={{ y: -2 }}
-          className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between h-36"
+          onClick={() => onNavigateToInventory('all')}
+          className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm cursor-pointer flex flex-col justify-between h-36 transition-all"
         >
           <div className="flex justify-between items-start">
-            <div className="p-2.5 bg-slate-50 text-slate-600 rounded-xl">
-              <Clipboard className="w-5 h-5" />
+            <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl">
+              <Package className="w-5 h-5" />
             </div>
-            <span className="text-[10px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded uppercase tracking-wider">Mutasi</span>
+            <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded uppercase tracking-wider">
+              Bahan Baku
+            </span>
           </div>
           <div>
-            <span className="text-2xl font-extrabold text-slate-900">{totalTransactions}</span>
-            <span className="text-xs text-slate-500 block mt-0.5 font-medium">Total Log Aktivitas</span>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-2xl font-extrabold text-slate-900">{totalItems}</span>
+              <span className="text-xs font-bold text-emerald-600">Jenis</span>
+            </div>
+            <span className="text-xs text-slate-500 block mt-0.5 font-medium">
+              Total Bahan Baku ({totalStockSum.toLocaleString('id-ID')} Total Stok)
+            </span>
           </div>
         </motion.div>
 

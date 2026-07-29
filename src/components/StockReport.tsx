@@ -1037,8 +1037,8 @@ export default function StockReport({ ingredients, logs, appName = 'Dapur SPPG' 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 print:hidden">
         <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs flex items-center justify-between">
           <div>
-            <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Total Stock Awal</p>
-            <p className="text-lg font-black text-slate-800 mt-0.5">{formatIDNumber(totals.stockAwal)}</p>
+            <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Total Bahan Baku</p>
+            <p className="text-lg font-black text-slate-800 mt-0.5">{sortedFilteredRows.length} <span className="text-xs font-medium text-slate-500">Jenis</span></p>
           </div>
           <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
             <Boxes className="w-5 h-5" />
