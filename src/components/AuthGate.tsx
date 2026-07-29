@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { googleSignIn, logoutFirebase } from '../lib/firebaseAuth';
 import { UserProfile, UserRole } from '../types';
-import { LogIn, ShieldAlert, KeyRound, ArrowLeft, RefreshCw, LogOut, CheckCircle2, Copy, ExternalLink, Check, Globe } from 'lucide-react';
+import { LogIn, ShieldAlert, KeyRound, ArrowLeft, RefreshCw, LogOut, CheckCircle2, Copy, ExternalLink, Check, Globe, Sparkles, Info } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface AuthGateProps {
@@ -12,6 +12,7 @@ interface AuthGateProps {
   googleUserEmail: string | null;
   onGoogleSignIn: () => Promise<{ email: string; token: string }>;
   onSignOut: () => Promise<void>;
+  onDemoBypass?: () => void;
 }
 
 export default function AuthGate({
@@ -22,6 +23,7 @@ export default function AuthGate({
   googleUserEmail,
   onGoogleSignIn,
   onSignOut,
+  onDemoBypass,
 }: AuthGateProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -176,34 +178,35 @@ export default function AuthGate({
             <p className="leading-relaxed text-red-700">{error}</p>
 
             {isUnauthorizedDomainErr && (
-              <div className="mt-3 pt-3 border-t border-red-200/80 space-y-2 text-[11px]">
-                <div className="bg-white p-2.5 rounded-xl border border-red-200 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5 truncate">
-                    <Globe className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                    <span className="font-mono font-bold text-slate-800 truncate">{currentHostname}</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleCopyDomain}
-                    className="shrink-0 bg-red-100 hover:bg-red-200 text-red-800 font-bold px-2 py-1 rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
-                  >
-                    {copiedDomain ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
-                    <span>{copiedDomain ? 'Tersalin!' : 'Salin Domain'}</span>
-                  </button>
+              <div className="mt-3 pt-3 border-t border-red-200/80 space-y-2.5 text-[11px]">
+                <div className="bg-amber-50 p-2.5 rounded-xl border border-amber-200 text-amber-900 space-y-1">
+                  <p className="font-bold flex items-center gap-1 text-amber-950">
+                    <Info className="w-3.5 h-3.5 text-amber-600 shrink-0" /> Mengapa pesan "Ask a project owner" muncul di Firebase Console?
+                  </p>
+                  <p className="text-[11px] leading-relaxed text-amber-800">
+                    Proyek Firebase ini dibuat otomatis di lingkungan Google AI Studio. Akun Google pribadi Anda belum memiliki akses <strong>Project Owner</strong> di Google Cloud GCP, sehingga Firebase Console membatasi akses edit setting domain.
+                  </p>
                 </div>
 
-                <div className="bg-white/80 p-2.5 rounded-xl border border-red-100 space-y-1.5 text-slate-700">
-                  <p className="font-bold text-slate-900 flex items-center gap-1">
-                    Cara Mengizinkan Domain di Firebase:
-                  </p>
-                  <ol className="list-decimal list-inside space-y-1 text-[11px] text-slate-600">
-                    <li>Buka <a href="https://console.firebase.google.com" target="_blank" rel="noreferrer" className="text-blue-600 underline font-semibold inline-flex items-center gap-0.5">Firebase Console <ExternalLink className="w-2.5 h-2.5 inline" /></a></li>
-                    <li>Pilih proyek Firebase Anda &rarr; <strong>Authentication</strong> &rarr; Tab <strong>Settings</strong></li>
-                    <li>Pada section <strong>Authorized domains</strong>, klik <strong>Add domain</strong></li>
-                    <li>Tempel domain <code className="bg-slate-100 px-1 py-0.5 rounded text-red-600 font-bold">{currentHostname}</code> lalu klik <strong>Save</strong></li>
-                    <li>Coba klik tombol <strong>Masuk dengan Google</strong> kembali.</li>
-                  </ol>
-                </div>
+                {onDemoBypass && (
+                  <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-200 space-y-2">
+                    <p className="font-bold text-emerald-950 text-[11px] flex items-center gap-1">
+                      <Sparkles className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      Solusi Cepat: Gunakan Mode Standalone / Lokal PIN
+                    </p>
+                    <p className="text-[11px] text-emerald-800 leading-relaxed">
+                      Anda tidak perlu mengubah setting Firebase Console! Klik tombol di bawah ini untuk langsung masuk dan menggunakan aplikasi secara penuh di <strong>{currentHostname}</strong>.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={onDemoBypass}
+                      className="w-full py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-extrabold rounded-xl text-xs transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <Sparkles className="w-4 h-4 text-emerald-200 animate-pulse" />
+                      <span>Masuk Mode Standalone Sekarang (Bypass Firebase)</span>
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -241,6 +244,17 @@ export default function AuthGate({
                   </>
                 )}
               </button>
+
+              {onDemoBypass && (
+                <button
+                  type="button"
+                  onClick={onDemoBypass}
+                  className="w-full mt-3 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 rounded-xl font-bold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer border border-slate-200"
+                >
+                  <Sparkles className="w-4 h-4 text-emerald-600" />
+                  <span>Masuk Mode Standalone / Akses PIN</span>
+                </button>
+              )}
             </motion.div>
           )}
 

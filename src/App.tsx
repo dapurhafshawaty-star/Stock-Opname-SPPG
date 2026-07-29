@@ -721,6 +721,7 @@ export default function App() {
           googleUserEmail={googleUserEmail}
           onGoogleSignIn={handleGoogleSignInComplete}
           onSignOut={handleSignOut}
+          onDemoBypass={handleDemoBypassSignIn}
         />
         
         {/* Offline Demo Mode Button in lower background */}
