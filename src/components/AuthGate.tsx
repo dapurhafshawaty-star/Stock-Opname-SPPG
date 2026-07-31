@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { googleSignIn, logoutFirebase } from '../lib/firebaseAuth';
 import { UserProfile, UserRole } from '../types';
-import { LogIn, ShieldAlert, KeyRound, ArrowLeft, RefreshCw, LogOut, CheckCircle2, Copy, ExternalLink, Check, Globe, Sparkles, Info } from 'lucide-react';
+import { LogIn, ShieldAlert, KeyRound, ArrowLeft, RefreshCw, LogOut, CheckCircle2, Copy, ExternalLink, Check, Globe, Sparkles, Info, Users, UserCheck, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface AuthGateProps {
@@ -31,6 +31,7 @@ export default function AuthGate({
   const [copiedDomain, setCopiedDomain] = useState(false);
   const currentHostname = typeof window !== 'undefined' ? window.location.hostname : '';
   const isUnauthorizedDomainErr = error?.toLowerCase().includes('unauthorized-domain') || error?.toLowerCase().includes('belum diizinkan');
+  const isNetworkReqErr = error?.toLowerCase().includes('network-request-failed') || error?.toLowerCase().includes('popup') || error?.toLowerCase().includes('terhubung');
 
   const handleCopyDomain = () => {
     if (navigator.clipboard) {
@@ -40,6 +41,7 @@ export default function AuthGate({
     }
   };
   const [selectedProfile, setSelectedProfile] = useState<UserProfile | null>(null);
+  const [showStandalonePicker, setShowStandalonePicker] = useState(false);
   const [pin, setPin] = useState('');
   const [pinError, setPinError] = useState(false);
   
@@ -52,9 +54,10 @@ export default function AuthGate({
   const handleGoogleLogin = async () => {
     setLoading(true);
     setError(null);
+    setShowStandalonePicker(false);
     try {
-      const result = await onGoogleSignIn();
-      // Wait for profiles to sync. If no profiles exist, show admin registration form
+      await onGoogleSignIn();
+      // Wait for profiles to sync.
     } catch (err: any) {
       console.error('Login error:', err);
       setError(err.message || 'Gagal login menggunakan akun Google.');
@@ -63,24 +66,29 @@ export default function AuthGate({
     }
   };
 
-  // Check if first-time setup is needed
+  // Check if email matches a registered staff profile
   useEffect(() => {
-    if (googleUserEmail && token) {
+    if (googleUserEmail) {
+      const cleanInputEmail = googleUserEmail.trim().toLowerCase();
       const matched = staffProfiles.find(
-        (p) => p.email.toLowerCase() === googleUserEmail.toLowerCase()
+        (p) => p.email.trim().toLowerCase() === cleanInputEmail
       );
       if (!matched && staffProfiles.length === 0) {
         setShowAdminReg(true);
       } else if (matched) {
         setSelectedProfile(matched);
+        setError(null);
       } else {
-        setError(`Email ${googleUserEmail} belum terdaftar. Silakan hubungi Admin Dapur SPPG.`);
+        setSelectedProfile(null);
+        setError(`Email ${googleUserEmail} belum terdaftar di Manajemen Hak Akses Staff.`);
       }
     } else {
-      setSelectedProfile(null);
+      if (!showStandalonePicker) {
+        setSelectedProfile(null);
+      }
       setShowAdminReg(false);
     }
-  }, [googleUserEmail, staffProfiles, token]);
+  }, [googleUserEmail, staffProfiles, showStandalonePicker]);
 
   // Handle Admin Register
   const handleRegisterAdmin = async (e: React.FormEvent) => {
@@ -94,10 +102,10 @@ export default function AuthGate({
     try {
       const newAdmin: UserProfile = {
         id: 'STAFF-' + Date.now(),
-        name: adminName,
-        email: googleUserEmail!,
+        name: adminName.trim(),
+        email: (googleUserEmail || 'admin@sppg.org').trim().toLowerCase(),
         role: 'ADMIN',
-        pin: adminPin,
+        pin: adminPin.trim(),
       };
       await onAddAdminProfile(newAdmin);
       setSelectedProfile(newAdmin);
@@ -138,12 +146,11 @@ export default function AuthGate({
     
     if (selectedProfile.pin === enteredPin) {
       // PIN correct! Proceed to app
-      onAuthComplete(selectedProfile, token!);
+      onAuthComplete(selectedProfile, token || 'standalone-token-1234');
     } else {
       // PIN incorrect
       setPinError(true);
       setPin('');
-      // Vibrate on error
       if (navigator.vibrate) {
         navigator.vibrate([100, 50, 100]);
       }
@@ -171,22 +178,47 @@ export default function AuthGate({
             <div className="flex items-start gap-2 mb-1.5">
               <ShieldAlert className="w-4 h-4 shrink-0 text-red-600 mt-0.5" />
               <div className="font-bold text-red-900 text-xs">
-                {isUnauthorizedDomainErr ? 'Domain Belum Diizinkan di Firebase' : 'Perhatian Log Masuk'}
+                {isUnauthorizedDomainErr
+                  ? 'Domain Belum Diizinkan di Firebase'
+                  : isNetworkReqErr
+                  ? 'Koneksi Google Sign-In Terhalang (Network Request Failed)'
+                  : 'Perhatian Log Masuk'}
               </div>
             </div>
             
             <p className="leading-relaxed text-red-700">{error}</p>
 
-            {isUnauthorizedDomainErr && (
+            {(isUnauthorizedDomainErr || isNetworkReqErr) && (
               <div className="mt-3 pt-3 border-t border-red-200/80 space-y-2.5 text-[11px]">
-                <div className="bg-amber-50 p-2.5 rounded-xl border border-amber-200 text-amber-900 space-y-1">
-                  <p className="font-bold flex items-center gap-1 text-amber-950">
-                    <Info className="w-3.5 h-3.5 text-amber-600 shrink-0" /> Mengapa pesan "Ask a project owner" muncul di Firebase Console?
-                  </p>
-                  <p className="text-[11px] leading-relaxed text-amber-800">
-                    Proyek Firebase ini dibuat otomatis di lingkungan Google AI Studio. Akun Google pribadi Anda belum memiliki akses <strong>Project Owner</strong> di Google Cloud GCP, sehingga Firebase Console membatasi akses edit setting domain.
-                  </p>
-                </div>
+                {isNetworkReqErr && (
+                  <div className="bg-amber-50 p-2.5 rounded-xl border border-amber-200 text-amber-900 space-y-1">
+                    <p className="font-bold flex items-center gap-1 text-amber-950">
+                      <Globe className="w-3.5 h-3.5 text-amber-600 shrink-0" /> Solusi 1: Buka di Tab Baru
+                    </p>
+                    <p className="text-[11px] leading-relaxed text-amber-800">
+                      Jendela popup Google diblokir oleh iframe preview. Buka aplikasi di tab baru browser agar popup Google Sign-In berjalan lancar.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => window.open(window.location.href, '_blank')}
+                      className="mt-1.5 w-full py-2 px-3 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer transition-all shadow-xs"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5 text-slate-300" />
+                      <span>Buka Aplikasi di Tab Baru</span>
+                    </button>
+                  </div>
+                )}
+
+                {isUnauthorizedDomainErr && (
+                  <div className="bg-amber-50 p-2.5 rounded-xl border border-amber-200 text-amber-900 space-y-1">
+                    <p className="font-bold flex items-center gap-1 text-amber-950">
+                      <Info className="w-3.5 h-3.5 text-amber-600 shrink-0" /> Mengapa pesan "Ask a project owner" muncul di Firebase Console?
+                    </p>
+                    <p className="text-[11px] leading-relaxed text-amber-800">
+                      Proyek Firebase ini dibuat otomatis di lingkungan Google AI Studio. Akun Google pribadi Anda belum memiliki akses <strong>Project Owner</strong> di Google Cloud GCP, sehingga Firebase Console membatasi akses edit setting domain.
+                    </p>
+                  </div>
+                )}
 
                 {onDemoBypass && (
                   <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-200 space-y-2">
@@ -195,15 +227,18 @@ export default function AuthGate({
                       Solusi Cepat: Gunakan Mode Standalone / Lokal PIN
                     </p>
                     <p className="text-[11px] text-emerald-800 leading-relaxed">
-                      Anda tidak perlu mengubah setting Firebase Console! Klik tombol di bawah ini untuk langsung masuk dan menggunakan aplikasi secara penuh di <strong>{currentHostname}</strong>.
+                      Pilih akun staff terdaftar di bawah untuk langsung masuk menggunakan 4-Digit PIN.
                     </p>
                     <button
                       type="button"
-                      onClick={onDemoBypass}
+                      onClick={() => {
+                        setShowStandalonePicker(true);
+                        setError(null);
+                      }}
                       className="w-full py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-extrabold rounded-xl text-xs transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer"
                     >
-                      <Sparkles className="w-4 h-4 text-emerald-200 animate-pulse" />
-                      <span>Masuk Mode Standalone Sekarang (Bypass Firebase)</span>
+                      <UserCheck className="w-4 h-4 text-emerald-200" />
+                      <span>Pilih Akun Staff & Masuk via PIN</span>
                     </button>
                   </div>
                 )}
@@ -213,8 +248,8 @@ export default function AuthGate({
         )}
 
         <AnimatePresence mode="wait">
-          {/* STEP 1: Google Sign-In */}
-          {!token && (
+          {/* STEP 1: Google Sign-In or Standalone Mode Switch */}
+          {!token && !showStandalonePicker && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -222,7 +257,7 @@ export default function AuthGate({
               className="flex flex-col items-center py-4"
             >
               <p className="text-sm text-slate-500 text-center mb-6 max-w-xs">
-                Gunakan email Google resmi Dapur SPPG untuk mengaktifkan sinkronisasi Google Sheets otomatis.
+                Gunakan email Google resmi Dapur SPPG atau pilih akun staff terdaftar di bawah ini.
               </p>
 
               <button
@@ -245,16 +280,84 @@ export default function AuthGate({
                 )}
               </button>
 
-              {onDemoBypass && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowStandalonePicker(true);
+                  setError(null);
+                }}
+                className="w-full mt-3 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 rounded-xl font-bold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer border border-slate-200"
+              >
+                <Users className="w-4 h-4 text-indigo-600" />
+                <span>Masuk via PIN / Pilih Email Terdaftar</span>
+              </button>
+            </motion.div>
+          )}
+
+          {/* STEP 1B: Standalone Staff Profile Picker */}
+          {!token && showStandalonePicker && !selectedProfile && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="space-y-4"
+            >
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                  <UserCheck className="w-4 h-4 text-emerald-600" /> Pilih Akun Staff Terdaftar
+                </h3>
                 <button
-                  type="button"
-                  onClick={onDemoBypass}
-                  className="w-full mt-3 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 rounded-xl font-bold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer border border-slate-200"
+                  onClick={() => setShowStandalonePicker(false)}
+                  className="text-xs text-slate-400 hover:text-slate-600 font-medium"
                 >
-                  <Sparkles className="w-4 h-4 text-emerald-600" />
-                  <span>Masuk Mode Standalone / Akses PIN</span>
+                  Kembali
                 </button>
-              )}
+              </div>
+
+              <p className="text-xs text-slate-500">
+                Pilih nama/email yang didaftarkan oleh Admin Dapur untuk memasukkan PIN 4-Digit:
+              </p>
+
+              <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                {staffProfiles.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => {
+                      setSelectedProfile(p);
+                      setPin('');
+                      setPinError(false);
+                    }}
+                    className="w-full p-3 rounded-xl border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/50 text-left transition-all flex items-center justify-between group cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-700 font-extrabold text-xs flex items-center justify-center group-hover:bg-emerald-500 group-hover:text-white transition-colors">
+                        {p.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="font-bold text-xs text-slate-800 group-hover:text-emerald-950">{p.name}</p>
+                        <p className="text-[11px] text-slate-400 font-mono">{p.email}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold ${
+                        p.role === 'ADMIN' ? 'bg-purple-100 text-purple-700' :
+                        p.role === 'SUPERVISOR' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'
+                      }`}>
+                        {p.role}
+                      </span>
+                      <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-emerald-600" />
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowStandalonePicker(false)}
+                className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" /> Gunakan Google Sign-In
+              </button>
             </motion.div>
           )}
 
@@ -322,7 +425,7 @@ export default function AuthGate({
           )}
 
           {/* STEP 3: PIN Verification Pad */}
-          {token && selectedProfile && !showAdminReg && (
+          {selectedProfile && !showAdminReg && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -331,13 +434,13 @@ export default function AuthGate({
             >
               <div className="flex items-center gap-2 mb-4 bg-emerald-50 text-emerald-800 px-3 py-1.5 rounded-full text-xs">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span>Terhubung: {googleUserEmail}</span>
+                <span>Email Terautentikasi: {selectedProfile.email}</span>
               </div>
 
               <div className="text-center mb-6">
                 <p className="text-xs font-medium text-slate-400 uppercase tracking-widest">Selamat Datang</p>
                 <h2 className="text-xl font-bold text-slate-900 mt-0.5">{selectedProfile.name}</h2>
-                <span className="inline-block mt-1 text-xs px-2 py-0.5 bg-slate-100 rounded text-slate-600 font-semibold">
+                <span className="inline-block mt-1 text-xs px-2.5 py-0.5 bg-slate-100 rounded-full text-slate-700 font-extrabold border border-slate-200">
                   Role: {selectedProfile.role === 'ADMIN' ? 'Admin Dapur' : selectedProfile.role === 'SUPERVISOR' ? 'Supervisor' : 'Staf Dapur'}
                 </span>
               </div>
@@ -397,10 +500,13 @@ export default function AuthGate({
 
               {/* Back Button / Switch Email */}
               <button
-                onClick={onSignOut}
+                onClick={() => {
+                  setSelectedProfile(null);
+                  if (token) onSignOut();
+                }}
                 className="mt-6 flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-600 font-medium transition-colors cursor-pointer"
               >
-                <ArrowLeft className="w-3.5 h-3.5" /> Keluar dari email ini
+                <ArrowLeft className="w-3.5 h-3.5" /> Pilih Akun / Switch Email
               </button>
             </motion.div>
           )}
@@ -414,3 +520,4 @@ export default function AuthGate({
     </div>
   );
 }
+

@@ -497,11 +497,36 @@ export default function Settings({
                 <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
                   <Users className="w-4.5 h-4.5 text-indigo-500" /> Manajemen Akun & Hak Akses Staff Dapur
                 </h3>
-                <p className="text-xs text-slate-400">Daftar pengguna terautentikasi yang dapat mengakses sistem inventory dapur.</p>
+                <p className="text-xs text-slate-400">Konfigurasi alamat email terautentikasi dan hak akses penggunaan aplikasi inventory dapur.</p>
               </div>
               <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-full text-[11px] font-extrabold border border-indigo-100">
                 {staffProfiles.length} Terdaftar
               </span>
+            </div>
+
+            {/* Access Rights Configuration Banner */}
+            <div className="bg-gradient-to-r from-indigo-50/80 to-blue-50/80 p-4 rounded-xl border border-indigo-100/80 text-xs space-y-2">
+              <div className="flex items-center gap-2 text-indigo-950 font-bold text-xs">
+                <ShieldCheck className="w-4 h-4 text-indigo-600 shrink-0" />
+                <span>Konfigurasi Otomatis Hak Akses Email</span>
+              </div>
+              <p className="text-[11px] text-indigo-800 leading-relaxed">
+                Setiap alamat email yang didaftarkan pada tabel di bawah ini secara <strong>otomatis diberikan izin masuk</strong> ke aplikasi ini. Staff dapat menggunakan login via <strong>Google Sign-In</strong> dengan email tersebut, atau memasukkan <strong>PIN 4-Digit</strong> pada perangkat dapur.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 text-[10px]">
+                <div className="bg-white/80 p-2 rounded-lg border border-indigo-100/60">
+                  <span className="font-bold text-purple-700 block">👑 ADMIN</span>
+                  <span className="text-slate-500">Kontrol penuh, tambah staff, ubah setting dapur, hapus data.</span>
+                </div>
+                <div className="bg-white/80 p-2 rounded-lg border border-indigo-100/60">
+                  <span className="font-bold text-amber-700 block">🛡️ SUPERVISOR</span>
+                  <span className="text-slate-500">Kelola menu, lihat laporan lengkap, audit mutasi & barang.</span>
+                </div>
+                <div className="bg-white/80 p-2 rounded-lg border border-indigo-100/60">
+                  <span className="font-bold text-blue-700 block">🧑‍🍳 STAF_DAPUR</span>
+                  <span className="text-slate-500">Input barang masuk, barang keluar, dan cek persediaan stok.</span>
+                </div>
+              </div>
             </div>
 
             {/* Staff List Table */}
@@ -510,8 +535,8 @@ export default function Settings({
                 <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold uppercase text-[10px]">
                   <tr>
                     <th className="px-4 py-3">Nama Staff</th>
-                    <th className="px-4 py-3">Email</th>
-                    <th className="px-4 py-3">Role</th>
+                    <th className="px-4 py-3">Alamat Email Terdaftar</th>
+                    <th className="px-4 py-3">Role & Hak Akses</th>
                     <th className="px-4 py-3 text-center">PIN</th>
                     {userRole === 'ADMIN' && <th className="px-4 py-3 text-right">Aksi</th>}
                   </tr>
@@ -519,26 +544,38 @@ export default function Settings({
                 <tbody className="divide-y divide-slate-100">
                   {staffProfiles.map((p) => (
                     <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="px-4 py-3 font-bold text-slate-800">{p.name}</td>
-                      <td className="px-4 py-3 text-slate-500 font-mono text-[11px]">{p.email}</td>
+                      <td className="px-4 py-3 font-bold text-slate-800">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 font-bold text-xs flex items-center justify-center shrink-0">
+                            {p.name.charAt(0).toUpperCase()}
+                          </div>
+                          <span>{p.name}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-slate-600 font-mono text-[11px]">
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-100 border border-slate-200/60">
+                          <Check className="w-3 h-3 text-emerald-600" />
+                          {p.email}
+                        </span>
+                      </td>
                       <td className="px-4 py-3">
                         <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold ${
-                          p.role === 'ADMIN' ? 'bg-purple-100 text-purple-700' :
-                          p.role === 'SUPERVISOR' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'
+                          p.role === 'ADMIN' ? 'bg-purple-100 text-purple-700 border border-purple-200' :
+                          p.role === 'SUPERVISOR' ? 'bg-amber-100 text-amber-700 border border-amber-200' : 'bg-blue-100 text-blue-700 border border-blue-200'
                         }`}>
                           {p.role}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-center font-mono font-bold text-slate-600">
-                        {p.pin}
+                        <span className="px-2 py-1 bg-slate-100 rounded text-xs tracking-widest">{p.pin}</span>
                       </td>
                       {userRole === 'ADMIN' && (
                         <td className="px-4 py-3 text-right">
                           <button
                             onClick={() => handleDeleteStaff(p)}
                             disabled={staffLoading}
-                            className="p-1 text-slate-400 hover:text-red-600 rounded hover:bg-red-50 transition-colors cursor-pointer"
-                            title="Hapus Staff"
+                            className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
+                            title="Hapus Hak Akses Staff"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -554,16 +591,16 @@ export default function Settings({
             {userRole === 'ADMIN' && (
               <form onSubmit={handleAddStaffSubmit} className="bg-slate-50 p-4 rounded-xl border border-slate-200/60 space-y-3">
                 <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                  <UserPlus className="w-4 h-4 text-indigo-600" /> Tambah Akun Staff Dapur Baru
+                  <UserPlus className="w-4 h-4 text-indigo-600" /> Daftarkan Email Staff & Berikan Hak Akses
                 </h4>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[10px] font-bold text-slate-500 block mb-1">Nama Lengkap</label>
+                    <label className="text-[10px] font-bold text-slate-500 block mb-1">Nama Lengkap Staff</label>
                     <input
                       type="text"
                       required
-                      placeholder="Nama Petugas Dapur..."
+                      placeholder="Contoh: Chef Budi"
                       value={newStaffName}
                       onChange={(e) => setNewStaffName(e.target.value)}
                       className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs bg-white focus:outline-none focus:border-indigo-500"
@@ -571,19 +608,20 @@ export default function Settings({
                   </div>
 
                   <div>
-                    <label className="text-[10px] font-bold text-slate-500 block mb-1">Alamat Email</label>
+                    <label className="text-[10px] font-bold text-slate-500 block mb-1">Alamat Email Google Staff</label>
                     <input
                       type="email"
                       required
-                      placeholder="email@sppg.org"
+                      placeholder="budi@gmail.com"
                       value={newStaffEmail}
                       onChange={(e) => setNewStaffEmail(e.target.value)}
-                      className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs bg-white focus:outline-none focus:border-indigo-500"
+                      className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs bg-white focus:outline-none focus:border-indigo-500 font-mono"
                     />
+                    <span className="text-[10px] text-slate-400 mt-0.5 block">Email ini yang akan diizinkan login via Google atau PIN.</span>
                   </div>
 
                   <div>
-                    <label className="text-[10px] font-bold text-slate-500 block mb-1">Role/Hak Akses</label>
+                    <label className="text-[10px] font-bold text-slate-500 block mb-1">Role & Level Hak Akses</label>
                     <select
                       value={newStaffRole}
                       onChange={(e) => setNewStaffRole(e.target.value as UserRole)}
@@ -603,7 +641,7 @@ export default function Settings({
                       maxLength={4}
                       placeholder="1234"
                       value={newStaffPin}
-                      onChange={(e) => setNewStaffPin(e.target.value)}
+                      onChange={(e) => setNewStaffPin(e.target.value.replace(/[^0-9]/g, ''))}
                       className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs bg-white focus:outline-none focus:border-indigo-500 font-mono tracking-widest text-center"
                     />
                   </div>
@@ -613,9 +651,9 @@ export default function Settings({
                   <button
                     type="submit"
                     disabled={staffLoading}
-                    className="py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs transition-colors flex items-center gap-1.5 cursor-pointer ml-auto"
+                    className="py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs transition-colors flex items-center gap-1.5 cursor-pointer ml-auto shadow-sm"
                   >
-                    {staffLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <><UserPlus className="w-3.5 h-3.5" /> Tambahkan Staff Ke Cloud</>}
+                    {staffLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <><UserPlus className="w-3.5 h-3.5" /> Daftarkan Email & Simpan Hak Akses</>}
                   </button>
                 </div>
               </form>

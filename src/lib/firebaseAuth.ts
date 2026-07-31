@@ -61,6 +61,20 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
       (customError as any).hostname = currentHost;
       throw customError;
     }
+    if (error?.code === 'auth/network-request-failed' || error?.message?.includes('network-request-failed')) {
+      const customError = new Error(
+        'Gagal terhubung ke Google Sign-In (network-request-failed). Ini biasa terjadi di dalam iframe atau jika popup diblokir oleh browser. Silakan Buka Aplikasi di Tab Baru atau gunakan Mode Standalone / PIN.'
+      );
+      (customError as any).code = 'auth/network-request-failed';
+      throw customError;
+    }
+    if (error?.code === 'auth/popup-blocked') {
+      const customError = new Error(
+        'Popup Google Sign-In diblokir oleh browser Anda. Harap izinkan popup untuk situs ini atau Buka Aplikasi di Tab Baru.'
+      );
+      (customError as any).code = 'auth/popup-blocked';
+      throw customError;
+    }
     throw error;
   } finally {
     isSigningIn = false;
