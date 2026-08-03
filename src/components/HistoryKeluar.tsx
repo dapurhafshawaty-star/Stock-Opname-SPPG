@@ -58,7 +58,7 @@ export default function HistoryKeluar({ logs, ingredients }: HistoryKeluarProps)
         (log.notes && log.notes.toLowerCase().includes(term));
 
       // 2. Category match (lookup ingredient category)
-      const ing = ingredients.find(i => i.id === log.ingredientId);
+      const ing = ingredients.find(i => i.id === log.ingredientId || i.name.trim().toLowerCase() === log.ingredientName.trim().toLowerCase());
       const ingredientCategory = ing ? ing.category : 'Lainnya';
       const matchesCategory = selectedCategory === 'All' || ingredientCategory === selectedCategory;
 
@@ -149,7 +149,7 @@ export default function HistoryKeluar({ logs, ingredients }: HistoryKeluarProps)
     }
 
     const dataToExport = filteredLogs.map((log, index) => {
-      const ing = ingredients.find(i => i.id === log.ingredientId);
+      const ing = ingredients.find(i => i.id === log.ingredientId || i.name.trim().toLowerCase() === log.ingredientName.trim().toLowerCase());
       return {
         'No': index + 1,
         'Waktu Keluar': new Date(log.timestamp).toLocaleString('id-ID'),
@@ -378,7 +378,7 @@ export default function HistoryKeluar({ logs, ingredients }: HistoryKeluarProps)
                 <tbody className="divide-y divide-slate-100 text-xs">
                   {paginatedLogs.map((log, index) => {
                     const idx = (currentPage - 1) * itemsPerPage + index + 1;
-                    const ing = ingredients.find(i => i.id === log.ingredientId);
+                    const ing = ingredients.find(i => i.id === log.ingredientId || i.name.trim().toLowerCase() === log.ingredientName.trim().toLowerCase());
                     
                     return (
                       <tr key={`${log.id}-${index}`} className="hover:bg-slate-50/40 text-slate-700 transition-colors">
@@ -425,7 +425,7 @@ export default function HistoryKeluar({ logs, ingredients }: HistoryKeluarProps)
             <div className="md:hidden divide-y divide-slate-100 p-4 space-y-3.5">
               {paginatedLogs.map((log, index) => {
                 const idx = (currentPage - 1) * itemsPerPage + index + 1;
-                const ing = ingredients.find(i => i.id === log.ingredientId);
+                const ing = ingredients.find(i => i.id === log.ingredientId || i.name.trim().toLowerCase() === log.ingredientName.trim().toLowerCase());
                 
                 return (
                   <div key={`${log.id}-${index}`} className="bg-slate-50/40 p-4 rounded-2xl border border-slate-100 space-y-3">

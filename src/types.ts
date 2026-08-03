@@ -70,6 +70,7 @@ export interface Ingredient {
   location: string; // e.g., 'Kulkas Utama', 'Rak Kering A'
   lastUpdated: string;
   notes?: string;
+  pricePerUnit?: number; // Optional price per unit (Rp)
   batches?: StockBatch[]; // FIFO/FEFO batches
 }
 

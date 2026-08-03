@@ -16,7 +16,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Building2,
-  CalendarDays
+  CalendarDays,
+  Coins,
+  Tag
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -44,6 +46,12 @@ const formatBarangMasuk = (val: number) => {
 
 const formatBarangKeluar = (val: number) => {
   return formatIDNumber(val);
+};
+
+// Helper function to format IDR currency (e.g. Rp 15.000)
+const formatRupiah = (val: number | undefined | null) => {
+  if (val === undefined || val === null || isNaN(val) || val <= 0) return '-';
+  return `Rp ${val.toLocaleString('id-ID')}`;
 };
 
 // Helper function to format date with Day name in Indonesian (e.g. "Sabtu, 24 Juli 2026")
@@ -365,6 +373,18 @@ export default function StockReport({ ingredients, logs, appName = 'Dapur SPPG' 
   const [currentPage, setCurrentPage] = useState<number>(1);
   const itemsPerPage = 25;
 
+  // Optional price per ingredient state (ingredientId -> price string)
+  const [prices, setPrices] = useState<Record<string, string>>({});
+
+  const handlePriceChange = (id: string, val: string) => {
+    // Clean to numeric string
+    const cleanVal = val.replace(/[^0-9]/g, '');
+    setPrices((prev) => ({
+      ...prev,
+      [id]: cleanVal,
+    }));
+  };
+
   // Presets
   const setPresetDate = (type: 'today' | 'yesterday' | 'week' | 'month') => {
     const now = new Date();
@@ -439,6 +459,7 @@ export default function StockReport({ ingredients, logs, appName = 'Dapur SPPG' 
         stockAwal,
         barangKeluar,
         stockAkhir,
+        pricePerUnit: ing.pricePerUnit,
       };
     });
   }, [ingredients, logs, startDate, endDate]);
@@ -514,14 +535,42 @@ export default function StockReport({ ingredients, logs, appName = 'Dapur SPPG' 
   // Aggregated Summary Totals
   const totals = useMemo(() => {
     return sortedFilteredRows.reduce(
-      (acc, r) => ({
-        stockAwal: acc.stockAwal + r.stockAwal,
-        barangKeluar: acc.barangKeluar + r.barangKeluar,
-        stockAkhir: acc.stockAkhir + r.stockAkhir,
-      }),
-      { stockAwal: 0, barangKeluar: 0, stockAkhir: 0 }
+      (acc, r) => {
+        const pStr = prices[r.id];
+        const price = pStr !== undefined && pStr !== '' ? parseFloat(pStr) : (r.pricePerUnit || 0);
+        const validPrice = isNaN(price) ? 0 : price;
+        const totalNilai = r.stockAkhir * validPrice;
+        return {
+          stockAwal: acc.stockAwal + r.stockAwal,
+          barangKeluar: acc.barangKeluar + r.barangKeluar,
+          stockAkhir: acc.stockAkhir + r.stockAkhir,
+          totalNilai: acc.totalNilai + totalNilai,
+        };
+      },
+      { stockAwal: 0, barangKeluar: 0, stockAkhir: 0, totalNilai: 0 }
     );
-  }, [sortedFilteredRows]);
+  }, [sortedFilteredRows, prices]);
+
+  // Aggregated Totals for History Barang Keluar
+  const historyKeluarTotals = useMemo(() => {
+    return keluarHistoryLogs.reduce(
+      (acc, log) => {
+        const ing = ingredients.find((i) => i.id === log.ingredientId || i.name.trim().toLowerCase() === log.ingredientName.trim().toLowerCase());
+        const key = ing ? ing.id : log.ingredientId;
+        const pStr = prices[key] || prices[log.ingredientId];
+        const price = pStr !== undefined && pStr !== '' ? parseFloat(pStr) : (ing?.pricePerUnit || 0);
+        const validPrice = isNaN(price) ? 0 : price;
+        const qty = Math.abs(log.quantity);
+        const nilai = qty * validPrice;
+
+        return {
+          totalQty: acc.totalQty + qty,
+          totalNilai: acc.totalNilai + nilai,
+        };
+      },
+      { totalQty: 0, totalNilai: 0 }
+    );
+  }, [keluarHistoryLogs, ingredients, prices]);
 
   // Format Date Range Label (e.g., "25 Juli 2026")
   const dateRangeLabel = useMemo(() => {
@@ -546,15 +595,24 @@ export default function StockReport({ ingredients, logs, appName = 'Dapur SPPG' 
       return;
     }
 
-    const exportData = sortedFilteredRows.map((row, idx) => ({
-      'No': idx + 1,
-      'Nama Bahan Baku': row.name,
-      'Satuan': row.unit,
-      'Stock Awal': formatIDNumber(row.stockAwal),
-      'Barang Keluar': formatBarangKeluar(row.barangKeluar),
-      'Stock Akhir': formatIDNumber(row.stockAkhir),
-      'Status Stock': row.stockAkhir > 0 ? 'Tersedia' : 'Habis / Keluar',
-    }));
+    const exportData = sortedFilteredRows.map((row, idx) => {
+      const pStr = prices[row.id];
+      const price = pStr !== undefined && pStr !== '' ? parseFloat(pStr) : (row.pricePerUnit || 0);
+      const validPrice = isNaN(price) ? 0 : price;
+      const totalNilai = row.stockAkhir * validPrice;
+
+      return {
+        'No': idx + 1,
+        'Nama Bahan Baku': row.name,
+        'Satuan': row.unit,
+        'Stock Awal': formatIDNumber(row.stockAwal),
+        'Barang Keluar': formatBarangKeluar(row.barangKeluar),
+        'Stock Akhir': formatIDNumber(row.stockAkhir),
+        'Harga Satuan (Rp)': validPrice > 0 ? `Rp ${validPrice.toLocaleString('id-ID')}` : '-',
+        'Total Nilai Stock (Rp)': totalNilai > 0 ? `Rp ${totalNilai.toLocaleString('id-ID')}` : '-',
+        'Status Stock': row.stockAkhir > 0 ? 'Tersedia' : 'Habis / Keluar',
+      };
+    });
 
     // Add Summary Row
     exportData.push({
@@ -564,6 +622,8 @@ export default function StockReport({ ingredients, logs, appName = 'Dapur SPPG' 
       'Stock Awal': formatIDNumber(totals.stockAwal),
       'Barang Keluar': formatBarangKeluar(totals.barangKeluar),
       'Stock Akhir': formatIDNumber(totals.stockAkhir),
+      'Harga Satuan (Rp)': '-',
+      'Total Nilai Stock (Rp)': totals.totalNilai > 0 ? `Rp ${totals.totalNilai.toLocaleString('id-ID')}` : '-',
       'Status Stock': '-',
     });
 
@@ -573,18 +633,48 @@ export default function StockReport({ ingredients, logs, appName = 'Dapur SPPG' 
 
     // Add Sheet 2: History Barang Keluar
     if (keluarHistoryLogs.length > 0) {
+      let totalQtyHistory = 0;
+      let totalNilaiHistory = 0;
+
       const historyData = keluarHistoryLogs.map((log, idx) => {
-        const ing = ingredients.find((i) => i.id === log.ingredientId);
+        const ing = ingredients.find((i) => i.id === log.ingredientId || i.name.trim().toLowerCase() === log.ingredientName.trim().toLowerCase());
+        const key = ing ? ing.id : log.ingredientId;
+        const unitStr = ing ? ing.unit : '-';
+        const pStr = prices[key] || prices[log.ingredientId];
+        const price = pStr !== undefined && pStr !== '' ? parseFloat(pStr) : (ing?.pricePerUnit || 0);
+        const validPrice = isNaN(price) ? 0 : price;
+        const qty = Math.abs(log.quantity);
+        const totalNilai = qty * validPrice;
+
+        totalQtyHistory += qty;
+        totalNilaiHistory += totalNilai;
+
         return {
           'No': idx + 1,
           'Tanggal & Waktu': new Date(log.timestamp).toLocaleString('id-ID'),
           'Nama Bahan Baku': log.ingredientName,
-          'Satuan': ing ? ing.unit : '-',
-          'Jumlah Keluar': Math.abs(log.quantity),
+          'Satuan': unitStr,
+          'Jumlah Keluar': qty,
+          'Harga Satuan (Rp)': validPrice > 0 ? `Rp ${validPrice.toLocaleString('id-ID')}` : '-',
+          'Total Nilai Keluar (Rp)': totalNilai > 0 ? `Rp ${totalNilai.toLocaleString('id-ID')}` : '-',
           'Sisa Stok': log.newStock,
           'Petugas': log.user || 'Sistem',
         };
       });
+
+      // Summary row for Sheet 2
+      historyData.push({
+        'No': 'TOTAL',
+        'Tanggal & Waktu': `Total (${keluarHistoryLogs.length} Transaksi)`,
+        'Nama Bahan Baku': '-',
+        'Satuan': '-',
+        'Jumlah Keluar': totalQtyHistory,
+        'Harga Satuan (Rp)': '-',
+        'Total Nilai Keluar (Rp)': totalNilaiHistory > 0 ? `Rp ${totalNilaiHistory.toLocaleString('id-ID')}` : '-',
+        'Sisa Stok': 0,
+        'Petugas': '-',
+      });
+
       const historyWorksheet = XLSX.utils.json_to_sheet(historyData);
       XLSX.utils.book_append_sheet(workbook, historyWorksheet, 'History_Barang_Keluar');
     }
@@ -656,17 +746,28 @@ export default function StockReport({ ingredients, logs, appName = 'Dapur SPPG' 
       'Satuan',
       'Stock\nAwal',
       'Barang\nKeluar',
-      'Stock\nAkhir'
+      'Stock\nAkhir',
+      'Harga Satuan\n(Opsional)',
+      'Total Nilai\n(Rp)'
     ];
 
-    const tableRows = sortedFilteredRows.map((row, idx) => [
-      idx + 1,
-      row.name,
-      row.unit,
-      formatIDNumber(row.stockAwal),
-      formatBarangKeluar(row.barangKeluar),
-      formatIDNumber(row.stockAkhir),
-    ]);
+    const tableRows = sortedFilteredRows.map((row, idx) => {
+      const pStr = prices[row.id];
+      const price = pStr !== undefined && pStr !== '' ? parseFloat(pStr) : (row.pricePerUnit || 0);
+      const validPrice = isNaN(price) ? 0 : price;
+      const totalNilai = row.stockAkhir * validPrice;
+
+      return [
+        idx + 1,
+        row.name,
+        row.unit,
+        formatIDNumber(row.stockAwal),
+        formatBarangKeluar(row.barangKeluar),
+        formatIDNumber(row.stockAkhir),
+        validPrice > 0 ? `Rp ${validPrice.toLocaleString('id-ID')}` : '-',
+        totalNilai > 0 ? `Rp ${totalNilai.toLocaleString('id-ID')}` : '-',
+      ];
+    });
 
     // Summary Row if data exists
     tableRows.push([
@@ -676,6 +777,8 @@ export default function StockReport({ ingredients, logs, appName = 'Dapur SPPG' 
       formatIDNumber(totals.stockAwal),
       formatBarangKeluar(totals.barangKeluar),
       formatIDNumber(totals.stockAkhir),
+      '-',
+      totals.totalNilai > 0 ? `Rp ${totals.totalNilai.toLocaleString('id-ID')}` : '-',
     ]);
 
     // Render Table
@@ -689,19 +792,21 @@ export default function StockReport({ ingredients, logs, appName = 'Dapur SPPG' 
         fillColor: [255, 255, 255],
         textColor: [0, 0, 0],
         fontStyle: 'bold',
-        fontSize: 8.5,
+        fontSize: 8,
         halign: 'center',
         valign: 'middle',
         lineWidth: 0.5,
         lineColor: [0, 0, 0],
       },
       columnStyles: {
-        0: { halign: 'center', cellWidth: 35 },
-        1: { halign: 'left', cellWidth: 218 },
-        2: { halign: 'center', cellWidth: 50 },
-        3: { halign: 'right', cellWidth: 72 },
-        4: { halign: 'right', cellWidth: 74 },
-        5: { halign: 'right', cellWidth: 74 },
+        0: { halign: 'center', cellWidth: 26 },
+        1: { halign: 'left', cellWidth: 145 },
+        2: { halign: 'center', cellWidth: 42 },
+        3: { halign: 'right', cellWidth: 55 },
+        4: { halign: 'right', cellWidth: 55 },
+        5: { halign: 'right', cellWidth: 55 },
+        6: { halign: 'right', cellWidth: 70 },
+        7: { halign: 'right', cellWidth: 75 },
       },
       styles: {
         fontSize: 8,
@@ -777,10 +882,23 @@ export default function StockReport({ ingredients, logs, appName = 'Dapur SPPG' 
       doc.setFont('helvetica', 'normal');
       doc.text(`Periode: ${dateFormatted}`, 297.6, 54, { align: 'center' });
 
-      const historyCols = ['No', 'Tanggal & Waktu', 'Nama Bahan Baku', 'Satuan', 'Jumlah Keluar', 'Sisa Stok', 'Petugas'];
+      const historyCols = ['No', 'Tanggal & Waktu', 'Nama Bahan Baku', 'Satuan', 'Jumlah Keluar', 'Harga Satuan\n(Opsional)', 'Total Nilai\n(Rp)', 'Sisa Stok', 'Petugas'];
+      let totalQtyHistory = 0;
+      let totalNilaiHistory = 0;
+
       const historyRows = keluarHistoryLogs.map((log, idx) => {
-        const ing = ingredients.find((i) => i.id === log.ingredientId);
+        const ing = ingredients.find((i) => i.id === log.ingredientId || i.name.trim().toLowerCase() === log.ingredientName.trim().toLowerCase());
+        const key = ing ? ing.id : log.ingredientId;
         const unitStr = ing ? ing.unit : '-';
+        const pStr = prices[key] || prices[log.ingredientId];
+        const price = pStr !== undefined && pStr !== '' ? parseFloat(pStr) : (ing?.pricePerUnit || 0);
+        const validPrice = isNaN(price) ? 0 : price;
+        const qty = Math.abs(log.quantity);
+        const totalNilai = qty * validPrice;
+
+        totalQtyHistory += qty;
+        totalNilaiHistory += totalNilai;
+
         return [
           idx + 1,
           new Date(log.timestamp).toLocaleString('id-ID', {
@@ -792,11 +910,26 @@ export default function StockReport({ ingredients, logs, appName = 'Dapur SPPG' 
           }),
           log.ingredientName,
           unitStr,
-          `${Math.abs(log.quantity)}`,
+          `${qty}`,
+          validPrice > 0 ? `Rp ${validPrice.toLocaleString('id-ID')}` : '-',
+          totalNilai > 0 ? `Rp ${totalNilai.toLocaleString('id-ID')}` : '-',
           `${log.newStock}`,
           log.user || 'Sistem',
         ];
       });
+
+      // Add summary row for History PDF Table
+      historyRows.push([
+        'TOTAL',
+        `Total (${keluarHistoryLogs.length} Transaksi)`,
+        '-',
+        '-',
+        `${totalQtyHistory}`,
+        '-',
+        totalNilaiHistory > 0 ? `Rp ${totalNilaiHistory.toLocaleString('id-ID')}` : '-',
+        '-',
+        '-'
+      ]);
 
       autoTable(doc, {
         startY: 68,
@@ -823,13 +956,21 @@ export default function StockReport({ ingredients, logs, appName = 'Dapur SPPG' 
           textColor: [0, 0, 0],
         },
         columnStyles: {
-          0: { halign: 'center', cellWidth: 25 },
-          1: { halign: 'center', cellWidth: 80 },
-          2: { halign: 'left', cellWidth: 140 },
-          3: { halign: 'center', cellWidth: 55 },
-          4: { halign: 'right', cellWidth: 70 },
-          5: { halign: 'right', cellWidth: 70 },
-          6: { halign: 'left', cellWidth: 78 },
+          0: { halign: 'center', cellWidth: 22 },
+          1: { halign: 'left', cellWidth: 70 },
+          2: { halign: 'left', cellWidth: 105 },
+          3: { halign: 'center', cellWidth: 38 },
+          4: { halign: 'right', cellWidth: 48 },
+          5: { halign: 'right', cellWidth: 62 },
+          6: { halign: 'right', cellWidth: 68 },
+          7: { halign: 'right', cellWidth: 45 },
+          8: { halign: 'left', cellWidth: 60 },
+        },
+        didParseCell: (data) => {
+          if (data.section === 'body' && data.row.index === historyRows.length - 1) {
+            data.cell.styles.fontStyle = 'bold';
+            data.cell.styles.fillColor = [254, 242, 242]; // rose light background
+          }
         },
       });
     }
@@ -1034,7 +1175,7 @@ export default function StockReport({ ingredients, logs, appName = 'Dapur SPPG' 
       </div>
 
       {/* Summary Stats Grid (Hidden on print) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 print:hidden">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 print:hidden">
         <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs flex items-center justify-between">
           <div>
             <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Total Bahan Baku</p>
@@ -1062,6 +1203,18 @@ export default function StockReport({ ingredients, logs, appName = 'Dapur SPPG' 
           </div>
           <div className="w-10 h-10 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center font-bold">
             <Sparkles className="w-5 h-5" />
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Estimasi Nilai Stock</p>
+            <p className="text-base font-black text-emerald-700 mt-0.5 font-mono">
+              {totals.totalNilai > 0 ? formatRupiah(totals.totalNilai) : 'Rp 0 (Opsional)'}
+            </p>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+            <Coins className="w-5 h-5" />
           </div>
         </div>
       </div>
@@ -1119,9 +1272,14 @@ export default function StockReport({ ingredients, logs, appName = 'Dapur SPPG' 
               Periode Laporan: <strong className="text-emerald-700 bg-white/80 px-2 py-0.5 rounded-md border border-emerald-200/60 shadow-2xs ml-1">{dateRangeLabel}</strong>
             </span>
           </div>
-          <span className="text-[11px] font-black text-emerald-900 bg-emerald-100/60 px-2.5 py-1 rounded-full border border-emerald-200/60">
-            {filteredRows.length} Bahan Baku
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-medium text-slate-500 bg-white/70 px-2.5 py-1 rounded-lg border border-slate-200/60 hidden sm:inline-block">
+              💡 Harga bersifat opsional
+            </span>
+            <span className="text-[11px] font-black text-emerald-900 bg-emerald-100/60 px-2.5 py-1 rounded-full border border-emerald-200/60">
+              {filteredRows.length} Bahan Baku
+            </span>
+          </div>
         </div>
 
         {/* SCREEN TABLE (Paginated - Modern Elegant Style) */}
@@ -1130,17 +1288,22 @@ export default function StockReport({ ingredients, logs, appName = 'Dapur SPPG' 
             <thead>
               <tr className="bg-gradient-to-r from-emerald-800 via-emerald-700 to-teal-800 text-white text-[11px] font-black uppercase tracking-wider shadow-2xs">
                 <th className="py-3.5 px-3 w-12 text-center border-r border-emerald-600/30">No</th>
-                <th className="py-3.5 px-4 min-w-[200px] border-r border-emerald-600/30">Nama Bahan Baku</th>
-                <th className="py-3.5 px-3 min-w-[80px] text-center border-r border-emerald-600/30">Satuan</th>
-                <th className="py-3.5 px-4 min-w-[120px] text-right border-r border-emerald-600/30">Stock Awal</th>
-                <th className="py-3.5 px-4 min-w-[120px] text-right border-r border-emerald-600/30">Barang Keluar</th>
-                <th className="py-3.5 px-4 min-w-[130px] text-right">Stock Akhir</th>
+                <th className="py-3.5 px-4 min-w-[180px] border-r border-emerald-600/30">Nama Bahan Baku</th>
+                <th className="py-3.5 px-3 min-w-[70px] text-center border-r border-emerald-600/30">Satuan</th>
+                <th className="py-3.5 px-4 min-w-[100px] text-right border-r border-emerald-600/30">Stock Awal</th>
+                <th className="py-3.5 px-4 min-w-[100px] text-right border-r border-emerald-600/30">Barang Keluar</th>
+                <th className="py-3.5 px-4 min-w-[100px] text-right border-r border-emerald-600/30">Stock Akhir</th>
+                <th className="py-3.5 px-3 min-w-[140px] text-center border-r border-emerald-600/30">
+                  <div>Harga Satuan (Rp)</div>
+                  <span className="text-[9px] font-semibold text-emerald-200 block lowercase tracking-normal font-sans">(Input Opsional)</span>
+                </th>
+                <th className="py-3.5 px-4 min-w-[130px] text-right">Total Nilai Stock</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-xs text-slate-800 bg-white">
               {paginatedRows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="p-12 text-center text-slate-400">
+                  <td colSpan={8} className="p-12 text-center text-slate-400">
                     Tidak ada data bahan baku yang ditemukan untuk periode ini.
                   </td>
                 </tr>
@@ -1148,6 +1311,11 @@ export default function StockReport({ ingredients, logs, appName = 'Dapur SPPG' 
                 paginatedRows.map((row, index) => {
                   const itemIndex = (currentPage - 1) * itemsPerPage + index + 1;
                   const isEven = index % 2 === 0;
+                  const pStr = prices[row.id];
+                  const price = pStr !== undefined && pStr !== '' ? parseFloat(pStr) : (row.pricePerUnit || 0);
+                  const validPrice = isNaN(price) ? 0 : price;
+                  const totalNilai = row.stockAkhir * validPrice;
+
                   return (
                     <tr 
                       key={row.id} 
@@ -1183,7 +1351,7 @@ export default function StockReport({ ingredients, logs, appName = 'Dapur SPPG' 
                           <span className="text-slate-400 font-mono">0</span>
                         )}
                       </td>
-                      <td className="py-3 px-4 text-right">
+                      <td className="py-3 px-4 text-right border-r border-slate-100">
                         <span className={`inline-block font-mono font-extrabold px-3 py-1 rounded-lg text-[11px] shadow-2xs ${
                           row.stockAkhir > 0 
                             ? 'bg-emerald-700 text-white' 
@@ -1191,6 +1359,30 @@ export default function StockReport({ ingredients, logs, appName = 'Dapur SPPG' 
                         }`}>
                           {formatIDNumber(row.stockAkhir)}
                         </span>
+                      </td>
+                      {/* Input Harga Satuan Opsional */}
+                      <td className="py-2.5 px-3 border-r border-slate-100 min-w-[140px]">
+                        <div className="relative flex items-center">
+                          <span className="absolute left-2.5 text-[11px] font-bold text-slate-400 select-none">Rp</span>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            placeholder="Opsional"
+                            value={prices[row.id] !== undefined ? prices[row.id] : (row.pricePerUnit ? String(row.pricePerUnit) : '')}
+                            onChange={(e) => handlePriceChange(row.id, e.target.value)}
+                            className="w-full pl-8 pr-2 py-1 text-xs font-mono font-bold bg-slate-50 border border-slate-200 hover:border-emerald-400 focus:border-emerald-500 focus:bg-white focus:outline-none rounded-lg text-slate-800 transition-all text-right shadow-2xs"
+                          />
+                        </div>
+                      </td>
+                      {/* Total Nilai Stock */}
+                      <td className="py-3 px-4 text-right font-mono font-extrabold text-xs">
+                        {totalNilai > 0 ? (
+                          <span className="text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2.5 py-1 rounded-lg inline-block shadow-2xs">
+                            {formatRupiah(totalNilai)}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 font-normal text-[11px]">-</span>
+                        )}
                       </td>
                     </tr>
                   );
@@ -1212,8 +1404,12 @@ export default function StockReport({ ingredients, logs, appName = 'Dapur SPPG' 
                 <td className="py-3.5 px-4 text-right font-black font-mono border-r border-slate-800 text-rose-300">
                   {formatBarangKeluar(totals.barangKeluar)}
                 </td>
-                <td className="py-3.5 px-4 text-right font-black font-mono text-emerald-300 bg-slate-950/80">
+                <td className="py-3.5 px-4 text-right font-black font-mono border-r border-slate-800 text-emerald-300">
                   {formatIDNumber(totals.stockAkhir)}
+                </td>
+                <td className="py-3.5 px-3 text-center text-slate-500 border-r border-slate-800 font-normal text-[11px]">-</td>
+                <td className="py-3.5 px-4 text-right font-black font-mono text-emerald-300 bg-slate-950/80">
+                  {totals.totalNilai > 0 ? formatRupiah(totals.totalNilai) : '-'}
                 </td>
               </tr>
             </tfoot>
@@ -1225,25 +1421,36 @@ export default function StockReport({ ingredients, logs, appName = 'Dapur SPPG' 
           <table className="w-full text-left border-collapse border border-black font-serif text-xs">
             <thead>
               <tr className="bg-white text-black font-bold border-b border-black">
-                <th className="py-2 px-1.5 w-10 text-center border border-black">No</th>
+                <th className="py-2 px-1.5 w-8 text-center border border-black">No</th>
                 <th className="py-2 px-2 border border-black text-left">Nama Bahan Baku</th>
-                <th className="py-2 px-1.5 w-16 text-center border border-black">Satuan</th>
-                <th className="py-2 px-2 w-24 text-center border border-black">Stock<br/>Awal</th>
-                <th className="py-2 px-2 w-24 text-center border border-black">Barang<br/>Keluar</th>
-                <th className="py-2 px-2 w-24 text-center border border-black">Stock<br/>Akhir</th>
+                <th className="py-2 px-1.5 w-14 text-center border border-black">Satuan</th>
+                <th className="py-2 px-2 w-16 text-center border border-black">Stock<br/>Awal</th>
+                <th className="py-2 px-2 w-16 text-center border border-black">Barang<br/>Keluar</th>
+                <th className="py-2 px-2 w-16 text-center border border-black">Stock<br/>Akhir</th>
+                <th className="py-2 px-2 w-24 text-center border border-black">Harga Satuan<br/><span className="text-[9px] font-normal">(Opsional)</span></th>
+                <th className="py-2 px-2 w-24 text-center border border-black">Total Nilai<br/>Stock</th>
               </tr>
             </thead>
             <tbody className="text-black">
-              {sortedFilteredRows.map((row, index) => (
-                <tr key={row.id}>
-                  <td className="py-1.5 px-1.5 text-center border border-black">{index + 1}</td>
-                  <td className="py-1.5 px-2 border border-black font-medium">{row.name}</td>
-                  <td className="py-1.5 px-1.5 text-center border border-black">{row.unit}</td>
-                  <td className="py-1.5 px-2 text-right border border-black">{formatIDNumber(row.stockAwal)}</td>
-                  <td className="py-1.5 px-2 text-right border border-black">{formatBarangKeluar(row.barangKeluar)}</td>
-                  <td className="py-1.5 px-2 text-right border border-black">{formatIDNumber(row.stockAkhir)}</td>
-                </tr>
-              ))}
+              {sortedFilteredRows.map((row, index) => {
+                const pStr = prices[row.id];
+                const price = pStr !== undefined && pStr !== '' ? parseFloat(pStr) : (row.pricePerUnit || 0);
+                const validPrice = isNaN(price) ? 0 : price;
+                const totalNilai = row.stockAkhir * validPrice;
+
+                return (
+                  <tr key={row.id}>
+                    <td className="py-1.5 px-1.5 text-center border border-black">{index + 1}</td>
+                    <td className="py-1.5 px-2 border border-black font-medium">{row.name}</td>
+                    <td className="py-1.5 px-1.5 text-center border border-black">{row.unit}</td>
+                    <td className="py-1.5 px-2 text-right border border-black">{formatIDNumber(row.stockAwal)}</td>
+                    <td className="py-1.5 px-2 text-right border border-black">{formatBarangKeluar(row.barangKeluar)}</td>
+                    <td className="py-1.5 px-2 text-right border border-black">{formatIDNumber(row.stockAkhir)}</td>
+                    <td className="py-1.5 px-2 text-right border border-black">{validPrice > 0 ? `Rp ${validPrice.toLocaleString('id-ID')}` : '-'}</td>
+                    <td className="py-1.5 px-2 text-right border border-black">{totalNilai > 0 ? `Rp ${totalNilai.toLocaleString('id-ID')}` : '-'}</td>
+                  </tr>
+                );
+              })}
             </tbody>
             <tfoot>
               <tr className="bg-emerald-50/50 text-xs font-bold text-black">
@@ -1253,6 +1460,8 @@ export default function StockReport({ ingredients, logs, appName = 'Dapur SPPG' 
                 <td className="py-2 px-2 text-right border border-black font-black">{formatIDNumber(totals.stockAwal)}</td>
                 <td className="py-2 px-2 text-right border border-black font-black">{formatBarangKeluar(totals.barangKeluar)}</td>
                 <td className="py-2 px-2 text-right border border-black font-black">{formatIDNumber(totals.stockAkhir)}</td>
+                <td className="py-2 px-2 text-center border border-black font-normal">-</td>
+                <td className="py-2 px-2 text-right border border-black font-black">{totals.totalNilai > 0 ? `Rp ${totals.totalNilai.toLocaleString('id-ID')}` : '-'}</td>
               </tr>
             </tfoot>
           </table>
@@ -1321,9 +1530,16 @@ export default function StockReport({ ingredients, logs, appName = 'Dapur SPPG' 
               Riwayat Detail Transaksi Barang Keluar ({dateRangeLabel})
             </span>
           </div>
-          <span className="text-[11px] font-black text-rose-900 bg-rose-100 px-2.5 py-1 rounded-full border border-rose-200/80">
-            {keluarHistoryLogs.length} Transaksi Keluar
-          </span>
+          <div className="flex items-center gap-2">
+            {historyKeluarTotals.totalNilai > 0 && (
+              <span className="text-[11px] font-black text-rose-900 bg-white/80 px-2.5 py-1 rounded-full border border-rose-200/80 shadow-2xs">
+                Total Value: {formatRupiah(historyKeluarTotals.totalNilai)}
+              </span>
+            )}
+            <span className="text-[11px] font-black text-rose-900 bg-rose-100 px-2.5 py-1 rounded-full border border-rose-200/80">
+              {keluarHistoryLogs.length} Transaksi Keluar
+            </span>
+          </div>
         </div>
 
         {/* Screen Table for History Barang Keluar */}
@@ -1334,30 +1550,42 @@ export default function StockReport({ ingredients, logs, appName = 'Dapur SPPG' 
                 <th className="py-3 px-3 w-12 text-center border-r border-rose-600/30">No</th>
                 <th className="py-3 px-4 min-w-[140px] border-r border-rose-600/30">Tanggal & Waktu</th>
                 <th className="py-3 px-4 min-w-[180px] border-r border-rose-600/30">Nama Bahan Baku</th>
-                <th className="py-3 px-3 min-w-[90px] text-center border-r border-rose-600/30">Satuan</th>
-                <th className="py-3 px-4 min-w-[110px] text-right border-r border-rose-600/30">Jumlah Keluar</th>
-                <th className="py-3 px-4 min-w-[110px] text-right border-r border-rose-600/30">Sisa Stok</th>
+                <th className="py-3 px-3 min-w-[80px] text-center border-r border-rose-600/30">Satuan</th>
+                <th className="py-3 px-4 min-w-[100px] text-right border-r border-rose-600/30">Jumlah Keluar</th>
+                <th className="py-3 px-3 min-w-[140px] text-center border-r border-rose-600/30">
+                  <div>Harga Satuan (Rp)</div>
+                  <span className="text-[9px] font-semibold text-rose-200 block lowercase tracking-normal font-sans">(Input Opsional)</span>
+                </th>
+                <th className="py-3 px-4 min-w-[130px] text-right border-r border-rose-600/30">Total Nilai Keluar</th>
+                <th className="py-3 px-4 min-w-[100px] text-right border-r border-rose-600/30">Sisa Stok</th>
                 <th className="py-3 px-4 min-w-[120px]">Petugas</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-xs text-slate-800 bg-white">
               {keluarHistoryLogs.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-slate-400 font-medium">
+                  <td colSpan={9} className="p-8 text-center text-slate-400 font-medium">
                     Tidak ada catatan transaksi barang keluar pada periode ini.
                   </td>
                 </tr>
               ) : (
                 keluarHistoryLogs.map((log, index) => {
-                  const ing = ingredients.find((i) => i.id === log.ingredientId);
+                  const ing = ingredients.find((i) => i.id === log.ingredientId || i.name.trim().toLowerCase() === log.ingredientName.trim().toLowerCase());
+                  const key = ing ? ing.id : log.ingredientId;
                   const unitStr = ing ? ing.unit : '-';
+                  const pStr = prices[key] || prices[log.ingredientId];
+                  const price = pStr !== undefined && pStr !== '' ? parseFloat(pStr) : (ing?.pricePerUnit || 0);
+                  const validPrice = isNaN(price) ? 0 : price;
+                  const qty = Math.abs(log.quantity);
+                  const totalNilai = qty * validPrice;
                   const isEven = index % 2 === 0;
+
                   return (
                     <tr key={`${log.id}-${index}`} className={`${isEven ? 'bg-white' : 'bg-slate-50/50'} hover:bg-rose-50/30 transition-colors`}>
                       <td className="py-3 px-3 text-center text-slate-400 font-medium text-[11px] border-r border-slate-100">
                         {index + 1}
                       </td>
-                      <td className="py-3 px-4 font-semibold text-slate-600 border-r border-slate-100">
+                      <td className="py-3 px-4 font-semibold text-slate-600 border-r border-slate-100 whitespace-nowrap">
                         {new Date(log.timestamp).toLocaleString('id-ID', {
                           day: '2-digit',
                           month: 'short',
@@ -1376,8 +1604,32 @@ export default function StockReport({ ingredients, logs, appName = 'Dapur SPPG' 
                       </td>
                       <td className="py-3 px-4 text-right border-r border-slate-100">
                         <span className="inline-flex items-center gap-0.5 text-rose-700 bg-rose-50 border border-rose-200/80 font-extrabold px-2.5 py-1 rounded-md font-mono text-[11px]">
-                          -{Math.abs(log.quantity)}
+                          -{qty}
                         </span>
+                      </td>
+                      {/* Input Harga Satuan Opsional */}
+                      <td className="py-2.5 px-3 border-r border-slate-100 min-w-[140px]">
+                        <div className="relative flex items-center">
+                          <span className="absolute left-2.5 text-[11px] font-bold text-slate-400 select-none">Rp</span>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            placeholder="Opsional"
+                            value={prices[key] !== undefined ? prices[key] : (ing?.pricePerUnit ? String(ing.pricePerUnit) : '')}
+                            onChange={(e) => handlePriceChange(key, e.target.value)}
+                            className="w-full pl-8 pr-2 py-1 text-xs font-mono font-bold bg-slate-50 border border-slate-200 hover:border-rose-400 focus:border-rose-500 focus:bg-white focus:outline-none rounded-lg text-slate-800 transition-all text-right shadow-2xs"
+                          />
+                        </div>
+                      </td>
+                      {/* Total Nilai Keluar */}
+                      <td className="py-3 px-4 text-right border-r border-slate-100 font-mono font-extrabold text-xs">
+                        {totalNilai > 0 ? (
+                          <span className="text-rose-700 bg-rose-50 border border-rose-200/80 px-2.5 py-1 rounded-lg inline-block shadow-2xs">
+                            {formatRupiah(totalNilai)}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 font-normal text-[11px]">-</span>
+                        )}
                       </td>
                       <td className="py-3 px-4 text-right font-mono font-bold text-slate-700 border-r border-slate-100">
                         {log.newStock}
@@ -1390,6 +1642,23 @@ export default function StockReport({ ingredients, logs, appName = 'Dapur SPPG' 
                 })
               )}
             </tbody>
+            {keluarHistoryLogs.length > 0 && (
+              <tfoot>
+                <tr className="bg-slate-900 text-white font-bold text-xs">
+                  <td colSpan={4} className="py-3.5 px-4 text-center border-r border-slate-800">
+                    TOTAL ({keluarHistoryLogs.length} TRANSAKSI KELUAR)
+                  </td>
+                  <td className="py-3.5 px-4 text-right font-black font-mono border-r border-slate-800 text-rose-300">
+                    -{historyKeluarTotals.totalQty}
+                  </td>
+                  <td className="py-3.5 px-3 text-center text-slate-500 border-r border-slate-800 font-normal text-[11px]">-</td>
+                  <td className="py-3.5 px-4 text-right font-black font-mono text-rose-300 border-r border-slate-800">
+                    {historyKeluarTotals.totalNilai > 0 ? formatRupiah(historyKeluarTotals.totalNilai) : '-'}
+                  </td>
+                  <td colSpan={2} className="py-3.5 px-4 text-slate-500 text-center text-[11px] font-normal">-</td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
 
@@ -1406,6 +1675,8 @@ export default function StockReport({ ingredients, logs, appName = 'Dapur SPPG' 
                 <th className="py-1.5 px-2 border border-black">Nama Bahan Baku</th>
                 <th className="py-1.5 px-2 text-center border border-black">Satuan</th>
                 <th className="py-1.5 px-2 text-right border border-black">Jumlah Keluar</th>
+                <th className="py-1.5 px-2 text-right border border-black">Harga Satuan<br/><span className="text-[9px] font-normal">(Opsional)</span></th>
+                <th className="py-1.5 px-2 text-right border border-black">Total Nilai<br/>Keluar</th>
                 <th className="py-1.5 px-2 text-right border border-black">Sisa Stok</th>
                 <th className="py-1.5 px-2 border border-black">Petugas</th>
               </tr>
@@ -1413,14 +1684,21 @@ export default function StockReport({ ingredients, logs, appName = 'Dapur SPPG' 
             <tbody className="text-black">
               {keluarHistoryLogs.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-3 text-center border border-black italic">
+                  <td colSpan={9} className="py-3 text-center border border-black italic">
                     Tidak ada transaksi barang keluar pada periode ini.
                   </td>
                 </tr>
               ) : (
                 keluarHistoryLogs.map((log, index) => {
-                  const ing = ingredients.find((i) => i.id === log.ingredientId);
+                  const ing = ingredients.find((i) => i.id === log.ingredientId || i.name.trim().toLowerCase() === log.ingredientName.trim().toLowerCase());
+                  const key = ing ? ing.id : log.ingredientId;
                   const unitStr = ing ? ing.unit : '-';
+                  const pStr = prices[key] || prices[log.ingredientId];
+                  const price = pStr !== undefined && pStr !== '' ? parseFloat(pStr) : (ing?.pricePerUnit || 0);
+                  const validPrice = isNaN(price) ? 0 : price;
+                  const qty = Math.abs(log.quantity);
+                  const totalNilai = qty * validPrice;
+
                   return (
                     <tr key={`${log.id}-print-${index}`}>
                       <td className="py-1 px-1 text-center border border-black">{index + 1}</td>
@@ -1435,7 +1713,9 @@ export default function StockReport({ ingredients, logs, appName = 'Dapur SPPG' 
                       </td>
                       <td className="py-1 px-2 border border-black font-medium">{log.ingredientName}</td>
                       <td className="py-1 px-1.5 text-center border border-black">{unitStr}</td>
-                      <td className="py-1 px-2 text-right border border-black">-{Math.abs(log.quantity)}</td>
+                      <td className="py-1 px-2 text-right border border-black">-{qty}</td>
+                      <td className="py-1 px-2 text-right border border-black">{validPrice > 0 ? `Rp ${validPrice.toLocaleString('id-ID')}` : '-'}</td>
+                      <td className="py-1 px-2 text-right border border-black">{totalNilai > 0 ? `Rp ${totalNilai.toLocaleString('id-ID')}` : '-'}</td>
                       <td className="py-1 px-2 text-right border border-black">{log.newStock}</td>
                       <td className="py-1 px-1.5 border border-black">{log.user || '-'}</td>
                     </tr>
@@ -1443,6 +1723,17 @@ export default function StockReport({ ingredients, logs, appName = 'Dapur SPPG' 
                 })
               )}
             </tbody>
+            {keluarHistoryLogs.length > 0 && (
+              <tfoot>
+                <tr className="bg-rose-50/50 text-[11px] font-bold text-black">
+                  <td colSpan={4} className="py-1.5 px-2 text-center border border-black font-bold">TOTAL</td>
+                  <td className="py-1.5 px-2 text-right border border-black font-black">-{historyKeluarTotals.totalQty}</td>
+                  <td className="py-1.5 px-2 text-center border border-black font-normal">-</td>
+                  <td className="py-1.5 px-2 text-right border border-black font-black">{historyKeluarTotals.totalNilai > 0 ? `Rp ${historyKeluarTotals.totalNilai.toLocaleString('id-ID')}` : '-'}</td>
+                  <td colSpan={2} className="py-1.5 px-2 text-center border border-black font-normal">-</td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       </div>
